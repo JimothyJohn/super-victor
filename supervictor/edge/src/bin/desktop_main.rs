@@ -59,7 +59,14 @@ pub async fn socket_app() -> Result<(), Box<dyn std::error::Error>> {
         match TcpStream::connect(socket_addr).await {
             Ok(socket) => match connector.connect(server_name.clone(), socket).await {
                 Ok(mut tls_stream) => {
-                    let request = post_request(&base_host, &json_body, None);
+                    let request = match post_request(&base_host, &json_body, None) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            println!("Error building request: {}", e);
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    };
 
                     if let Err(e) = tls_stream.write_all(request.as_bytes()).await {
                         println!("Error writing request: {}", e);

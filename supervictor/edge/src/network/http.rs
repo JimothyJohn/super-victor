@@ -50,7 +50,7 @@ where
         Ok(json) => {
             push(&mut request, "Content-Length: ")?;
             push_usize(&mut request, json.len())?;
-            push(&mut request, "\r\nConnection: close\r\n\r\n")?;
+            push(&mut request, "\r\n\r\n")?;
             push(&mut request, &json)?;
         }
         Err(_) => {

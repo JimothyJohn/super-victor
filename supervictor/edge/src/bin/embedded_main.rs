@@ -26,6 +26,14 @@ use supervictor::config::*;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
+/// Halt on fatal init error — loops forever so the watchdog can reset the device.
+async fn halt() -> ! {
+    println!("Halting. Device will restart if watchdog is enabled.");
+    loop {
+        Timer::after(embassy_time::Duration::from_secs(60)).await;
+    }
+}
+
 // Magically convert a variable into a static variable
 macro_rules! make_static {
     ($t:ty,$val:expr) => {{
@@ -60,7 +68,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             Ok(ctrl) => ctrl,
             Err(e) => {
                 println!("FATAL: Failed to initialize esp-radio: {:?}", e);
-                panic!("esp-radio initialization failed");
+                halt().await;
             }
         }
     );
@@ -76,14 +84,14 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             Ok(r) => r,
             Err(e) => {
                 println!("FATAL: Failed to initialize WiFi: {:?}", e);
-                panic!("WiFi initialization failed");
+                halt().await;
             }
         };
 
     // Apply WiFi config before spawning tasks
     if let Err(e) = controller.set_config(&client_config) {
         println!("FATAL: WiFi set_config failed: {:?}", e);
-        panic!("WiFi set_config failed");
+        halt().await;
     }
 
     // Initialize the network stack
@@ -95,13 +103,19 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     );
 
     // Initialize TLS — mbedtls-rs needs Trng (implements CryptoRng)
-    let trng = Trng::try_new().expect("TrngSource must be active");
+    let trng = match Trng::try_new() {
+        Ok(t) => t,
+        Err(e) => {
+            println!("FATAL: Failed to initialize TRNG: {:?}", e);
+            halt().await;
+        }
+    };
     let trng_static = make_static!(Trng, trng);
     let mut tls = match Tls::new(trng_static) {
         Ok(t) => t,
         Err(e) => {
-            println!("Failed to create TLS context: {:?}", e);
-            panic!("Failed to create TLS context: {:?}", e);
+            println!("FATAL: Failed to create TLS context: {:?}", e);
+            halt().await;
         }
     };
     tls.set_debug(TLS_DEBUG_LEVEL);
