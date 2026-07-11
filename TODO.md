@@ -53,9 +53,11 @@ is the actionable engineering list. Check items off in the PR that lands them.
 
 ## P3 — Endpoint
 
-- [ ] `qs certs admin <name>` CLI subcommand: issue an admin client cert
-      (`OU=admin`) + PKCS#12 bundle for browser import — the dashboard's auth
-      gate is live; issuance is still a manual openssl invocation.
+- [x] `qs certs admin <name>` CLI subcommand: issue an admin client cert
+      (`OU=admin`) + PKCS#12 bundle for browser import. (Also restored
+      `gen_certs.sh` itself — the script `qs certs` invokes was missing from
+      the repo entirely; mocked tests never noticed. Now covered by real
+      openssl integration tests.)
 - [ ] Fleet dashboard Phase 4 (owner-scoped views, billing summaries) — waits
       on the enterprise data model (todo/ENTERPRISE.md).
 - [ ] Dashboard on Lambda: SSE degrades to reload-fallback behind API GW
