@@ -10,6 +10,9 @@ pub struct EdgeArgs {
     pub verbose: bool,
     /// Print commands without executing.
     pub dry_run: bool,
+    /// Serial port fallback (resolved from the OS environment at the CLI
+    /// boundary, not read ambiently here — keeps run_edge deterministic).
+    pub port: Option<String>,
 }
 
 /// Build and flash the ESP32-C3 embedded firmware via espflash.
@@ -23,11 +26,11 @@ pub fn run_edge(args: &EdgeArgs, config: &ProjectConfig, r: &dyn Runner) -> Resu
 
     runner::milestone("Building and flashing embedded firmware");
 
-    // .env.dev takes priority, fall back to OS environment
+    // .env.dev takes priority, fall back to the caller-supplied port
     let port = env_vars
         .get("ESPFLASH_PORT")
         .cloned()
-        .or_else(|| std::env::var("ESPFLASH_PORT").ok())
+        .or_else(|| args.port.clone())
         .unwrap_or_default();
 
     if !port.is_empty() {
