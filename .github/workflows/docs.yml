@@ -30,9 +30,6 @@ jobs:
       - name: Build docs (endpoint)
         run: cargo doc -p supervictor-endpoint --features sqlite --no-deps --target x86_64-unknown-linux-gnu
 
-      - name: Build docs (cli)
-        run: cargo doc -p supervictor-cli --no-deps --target x86_64-unknown-linux-gnu
-
       - name: Render dashboard demo (static, seeded)
         run: |
           mkdir -p site

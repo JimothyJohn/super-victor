@@ -19,7 +19,8 @@ ESP32-C3 ──mTLS──► Caddy ──► axum on t4g.micro ──► SQLite 
 
 The original pitch's "portable path" is real: one axum binary runs in Lambda
 (Web Adapter), on the staging box, or in any container. Deployment is
-`qs onboard` (cert → register → flash); monitoring is `/fleet` + `qs fleet` +
+`Quickstart onboard` (cert → register → flash); monitoring is `/fleet` +
+`Quickstart fleet` +
 the dashboard; sustainment is firmware-version reporting per uplink and the
 staleness watchdog. Release artifacts ship for the CLI (macOS) and the
 endpoint (Linux aarch64).
@@ -44,7 +45,7 @@ shows:
   WARNs; wire a CloudWatch metric filter + alarm (serverless path) or a
   journald → SNS relay (self-hosted) so a dark device pages instead of
   waiting to be read.
-- **Provisioning at batch scale.** `qs onboard` loops fine to ~10; past
+- **Provisioning at batch scale.** `Quickstart onboard` loops fine to ~10; past
   that, a manifest-driven batch mode (CSV/TOML in, certs + registrations
   out) keeps a site install to one command.
 

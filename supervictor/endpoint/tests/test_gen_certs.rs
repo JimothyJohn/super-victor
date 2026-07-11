@@ -1,15 +1,15 @@
-//! Integration tests for gen_certs.sh with REAL openssl — no mocks. The
-//! mocked command tests previously passed while the script itself didn't
-//! exist; this file is the regression against that class of drift.
+//! Integration tests for scripts/gen_certs.sh with REAL openssl — no mocks.
+//! (Mocked CLI tests once passed for months while the script itself was
+//! missing from the repo; this file is the regression against that.)
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn script_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../endpoint/scripts/gen_certs.sh")
+        .join("scripts/gen_certs.sh")
         .canonicalize()
-        .expect("gen_certs.sh must exist — `qs certs` invokes it")
+        .expect("gen_certs.sh must exist — `Quickstart certs` invokes it")
 }
 
 fn tmp_workdir(tag: &str) -> PathBuf {
@@ -71,6 +71,13 @@ fn full_issuance_chain_verifies_against_ca() {
     assert!(verify.status.success(), "chain verify failed: {verdict}");
     assert_eq!(verdict.matches(": OK").count(), 3, "verdict: {verdict}");
 
+    // The script's own verify mode agrees.
+    let script_verify = run_script(&dir, &["verify", "esp32", "caddy"], &[]);
+    assert!(
+        script_verify.status.success(),
+        "script verify mode failed: {script_verify:?}"
+    );
+
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -81,8 +88,8 @@ fn admin_cert_subject_satisfies_dashboard_gate() {
     let out = run_script(&dir, &["admin", "nick"], &[("P12_PASSWORD", "pw")]);
     assert!(out.status.success(), "admin failed: {out:?}");
 
-    // RFC2253 gives stable "K=V,K=V" output on both OpenSSL 3 (Linux prints
-    // "OU = admin" by default) and LibreSSL (macOS prints "OU=admin").
+    // RFC2253 gives stable "K=V,K=V" output on both OpenSSL 3 (Linux) and
+    // LibreSSL (macOS).
     let subject = stdout(&openssl(
         &dir,
         &[
@@ -95,9 +102,7 @@ fn admin_cert_subject_satisfies_dashboard_gate() {
             "RFC2253",
         ],
     ));
-    // The exact component the endpoint's is_admin_subject() matches on
-    // (its parser also trims spaces around '=', so both raw formats pass
-    // the gate itself).
+    // The exact component the endpoint's is_admin_subject() matches on.
     assert!(
         subject.contains("OU=admin"),
         "admin cert must carry OU=admin: {subject}"
@@ -149,7 +154,7 @@ fn signing_without_ca_fails_with_guidance() {
     let out = run_script(&dir, &["device", "esp32"], &[]);
     assert!(!out.status.success());
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("qs certs ca"),
+        String::from_utf8_lossy(&out.stderr).contains("certs ca"),
         "error should tell the user how to create the CA"
     );
     std::fs::remove_dir_all(&dir).ok();

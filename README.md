@@ -4,7 +4,7 @@
 
 **One language. One toolchain. Sensor to cloud.**
 
-Supervictor is an all-Rust IoT framework that covers the entire stack — bare-metal firmware on a RISC-V microcontroller, a cloud API, mTLS certificate management, and a CLI that wires it all together. No Python glue scripts. No Node.js lambdas. No YAML-driven code generators. Just Rust, from the register to the database.
+Supervictor is an all-Rust IoT framework that covers the entire stack — bare-metal firmware on a RISC-V microcontroller, a cloud API with a fleet dashboard, and mTLS certificate management — wired together by a single `./Quickstart` entry point. No Node.js lambdas. No YAML-driven code generators. Rust from the register to the database; one deliberate shell script for orchestration.
 
 ## Why One Language Matters
 
@@ -13,7 +13,7 @@ Most IoT stacks are a Frankenstein of C firmware, Python cloud functions, bash d
 Supervictor takes a different approach:
 
 - **Shared types across the entire stack.** The same `UplinkMessage` struct compiles into the firmware and the API. Change a field and the compiler catches every callsite — on the microcontroller *and* in the cloud — before anything ships.
-- **One build system.** `cargo build` works for the firmware, the API, and the CLI. No polyglot toolchain to install, no version matrix to maintain.
+- **One build system.** `cargo build` works for the firmware and the API. No polyglot toolchain to install, no version matrix to maintain.
 - **One test runner.** Unit tests, integration tests, and end-to-end mTLS verification all run with `cargo test`. Same language, same assertions, same CI pipeline.
 - **One dependency tree to audit.** Security review one ecosystem instead of three. `cargo audit` covers your firmware, your API, and your deploy tooling in a single pass.
 - **Refactor without fear.** Rename a function, restructure a module, change a protocol — the compiler tells you exactly what broke across every layer. Try that across C, Python, and JavaScript.
@@ -38,29 +38,27 @@ The result: an IoT stack where a solo developer moves as fast as a team, and a t
                    └──────────────────┘
 ```
 
-Four crates. Three binaries. One language.
+Three crates. Two binaries. One language.
 
 ## Quick Start
 
 ```bash
-# Clone and build the CLI
 git clone git@github.com:JimothyJohn/supervictor.git
-cd supervictor/supervictor/cli && cargo build --release
-alias qs=./target/release/qs
+cd supervictor
 
 # Generate mTLS certificates
-qs certs ca
-qs certs device esp32
-qs certs server caddy
+./Quickstart certs ca
+./Quickstart certs device esp32
+./Quickstart certs server caddy
 
-# Start local endpoint (Docker + Caddy mTLS reverse proxy)
-qs dev --serve
+# Start local endpoint (SAM local)
+./Quickstart dev --serve
 
 # Flash firmware to device
-qs edge
+./Quickstart edge
 
 # When ready: deploy to production
-qs prod
+./Quickstart prod
 ```
 
 ## Repository Layout
@@ -81,8 +79,6 @@ supervictor/
       src/store/                   #   pluggable backends (SQLite, DynamoDB)
       template.yaml                #   SAM/CloudFormation
       docker-compose.yml           #   local dev with Caddy mTLS
-    cli/                           # qs CLI (clap)
-      src/commands/                #   dev, edge, staging, prod, certs, onboard
   certs/                           # generated certs (gitignored)
   docs/                            # web interface
 ```
@@ -101,20 +97,21 @@ supervictor/
 
 Handlers are pure functions with zero framework coupling — testable without HTTP, swappable across web frameworks.
 
-## CLI Pipeline
+## Pipeline
 
-The `qs` CLI orchestrates the full lifecycle through progressive stages:
+`./Quickstart` orchestrates the full lifecycle through progressive stages:
 
 | Command | What it does |
 |---------|-------------|
-| `qs dev` | Unit tests + build endpoint + local server + integration tests |
-| `qs dev --serve` | Same, but keeps the server running for manual testing |
-| `qs edge` | Build + flash ESP32-C3 firmware |
-| `qs staging` | Dev gate + deploy dev stack + remote integration tests |
-| `qs prod` | Full pipeline + confirmation + production deployment |
-| `qs certs ca\|device\|server` | mTLS certificate lifecycle |
-| `qs ping` | mTLS health check against any endpoint |
-| `qs onboard` | End-to-end: certs + server + register + flash + verify |
+| `./Quickstart` | Lint + build (host, embedded, desktop) + full test suite |
+| `./Quickstart dev` | Endpoint tests + SAM local + integration tests |
+| `./Quickstart dev --serve` | Same, but keeps the local server running |
+| `./Quickstart edge` | Build + flash ESP32-C3 firmware |
+| `./Quickstart staging` | Dev gate + deploy dev stack + remote integration tests |
+| `./Quickstart prod` | Full pipeline + confirmation + production deployment |
+| `./Quickstart certs ca\|device\|server\|admin` | mTLS certificate lifecycle |
+| `./Quickstart ping` / `fleet` | mTLS health check / fleet status table |
+| `./Quickstart onboard` | End-to-end: cert + register + flash + verify |
 
 ## Pluggable Storage
 
