@@ -81,6 +81,30 @@
   .badge.mtls   { background: #3b0764; color: #d8b4fe; }
   .badge.esp    { background: #1e3a5f; color: #93c5fd; }
 
+  /* Hero links */
+  .cta {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .cta a {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: #0e0e10;
+  }
+  .cta a.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+  }
+  .cta a:hover { filter: brightness(1.1); }
+
   /* Sections */
   section {
     padding: 40px 0;
@@ -353,6 +377,10 @@
     <span class="badge esp">ESP32-C3</span>
     <span class="badge aws">AWS SAM</span>
     <span class="badge mtls">mTLS</span>
+  </div>
+  <div class="cta">
+    <a href="demo/">&#9654; Fleet dashboard demo</a>
+    <a href="api/" class="secondary">API docs</a>
   </div>
 </header>
 

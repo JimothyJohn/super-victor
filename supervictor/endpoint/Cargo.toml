@@ -29,5 +29,10 @@ aws-sdk-dynamodb = { version = "1", optional = true }
 aws-config = { version = "1", optional = true }
 supervictor-common = { path = "../common", features = ["alloc"] }
 
+# Renders a seeded, static copy of the dashboard for the GitHub Pages demo.
+[[example]]
+name = "render_demo"
+required-features = ["ui"]
+
 [dev-dependencies]
 axum-test = "19"

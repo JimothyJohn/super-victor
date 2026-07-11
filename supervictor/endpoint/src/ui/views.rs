@@ -44,7 +44,9 @@ pub struct FleetRow {
 
 /// Static SSE hookup — live row updates, with a reload fallback where SSE
 /// doesn't survive the proxy (Lambda/API GW buffers responses).
-const LIVE_SCRIPT: &str = r#"
+/// Public so the static-demo renderer (`examples/render_demo.rs`) can swap it
+/// for a simulated feed on the GitHub Pages demo.
+pub const LIVE_SCRIPT: &str = r#"
 (function () {
   var dot = document.getElementById('live-dot');
   var errors = 0;
