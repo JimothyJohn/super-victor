@@ -4438,7 +4438,7 @@ dependencies = [
  "esp-println",
  "esp-radio",
  "esp-rtos",
- "heapless 0.8.0",
+ "heapless 0.9.3",
  "mbedtls-rs",
  "rcgen",
  "reqwest",
