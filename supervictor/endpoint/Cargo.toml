@@ -35,4 +35,4 @@ name = "render_demo"
 required-features = ["ui"]
 
 [dev-dependencies]
-axum-test = "19"
+axum-test = "21"
