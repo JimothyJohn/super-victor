@@ -106,4 +106,4 @@ reqwest = { version = "0.12.15", features = ["json", "rustls-tls"] }
 tokio = { version = "1.0", features = ["full"] }
 rustls = "0.23.26"
 tokio-rustls = "0.26.2"
-rcgen = "0.13"
+rcgen = "0.14"
