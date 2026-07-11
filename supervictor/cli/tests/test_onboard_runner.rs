@@ -73,7 +73,10 @@ fn test_onboard_preflight_fails_missing_tools() {
     let mock = MockRunner::new();
 
     // docker info check will return success
-    mock.push_result(CommandOutput { status: 0, ..Default::default() });
+    mock.push_result(CommandOutput {
+        status: 0,
+        ..Default::default()
+    });
 
     let args = OnboardArgs {
         device_name: "test".to_string(),

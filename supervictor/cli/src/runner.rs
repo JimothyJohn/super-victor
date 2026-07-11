@@ -270,6 +270,12 @@ pub mod mock {
         pub bg_calls: RefCell<Vec<Vec<String>>>,
     }
 
+    impl Default for MockRunner {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MockRunner {
         /// Create an empty mock runner.
         pub fn new() -> Self {

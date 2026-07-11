@@ -41,7 +41,9 @@ impl SqliteDeviceStore {
                 device_id   TEXT NOT NULL,
                 received_at TEXT NOT NULL,
                 payload     TEXT NOT NULL
-            );",
+            );
+            CREATE INDEX IF NOT EXISTS idx_uplinks_device_received
+                ON uplinks(device_id, received_at DESC);",
         )
         .map_err(|e| AppError::Store(format!("migration: {e}")))?;
         Ok(())

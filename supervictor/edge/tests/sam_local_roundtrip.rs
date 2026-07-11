@@ -57,7 +57,7 @@ fn sam_local_get_hello() {
         }
     };
     let (addr, host) = parse_url(&url);
-    let request = get_request(&host, None);
+    let request = get_request(&host, None).expect("failed to build GET request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     let parsed = parse_response(&response_str).expect("parse_response failed on SAM local GET");
     assert!(
@@ -80,7 +80,7 @@ fn sam_local_post_hello() {
         id: "sam-test-device".try_into().unwrap(),
         current: 42,
     };
-    let request = post_request(&host, &msg, None);
+    let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     let parsed = parse_response(&response_str).expect("parse_response failed on SAM local POST");
     assert!(
@@ -103,7 +103,7 @@ fn sam_local_post_i32_max_current() {
         id: "i32-max-test".try_into().unwrap(),
         current: i32::MAX,
     };
-    let request = post_request(&host, &msg, None);
+    let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     let parsed = parse_response(&response_str).expect("parse_response failed on i32::MAX POST");
     assert!(!parsed.body.is_empty(), "SAM local did not handle i32::MAX");
@@ -119,7 +119,7 @@ fn sam_local_get_nonexistent_path() {
         }
     };
     let (addr, host) = parse_url(&url);
-    let request = get_request(&host, Some("/nonexistent"));
+    let request = get_request(&host, Some("/nonexistent")).expect("failed to build GET request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     // Should get some kind of error response but parse_response should still handle it
     let parsed = parse_response(&response_str).expect("parse_response failed on 404");
@@ -143,7 +143,7 @@ fn sam_local_post_empty_id() {
         id: heapless::String::new(),
         current: 0,
     };
-    let request = post_request(&host, &msg, None);
+    let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     // Server may accept or reject empty id — either way parse_response should work
     let parsed = parse_response(&response_str).expect("parse_response failed on empty id POST");

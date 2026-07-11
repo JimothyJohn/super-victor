@@ -9,6 +9,17 @@ use esp_println::println;
 use esp_radio::wifi::{WifiController, WifiDevice, WifiEvent, WifiStaState};
 use mbedtls_rs::{Session, SessionConfig, Tls};
 
+async fn backoff_delay(backoff: &mut Duration) {
+    println!("   retrying in {}ms", backoff.as_millis());
+    Timer::after(*backoff).await;
+    let doubled_ms = (backoff.as_millis() as u64).saturating_mul(2);
+    *backoff = if doubled_ms > BACKOFF_MAX.as_millis() as u64 {
+        BACKOFF_MAX
+    } else {
+        Duration::from_millis(doubled_ms)
+    };
+}
+
 /// Maintains the WiFi station connection, reconnecting on disconnect.
 #[cfg(feature = "embedded")]
 #[embassy_executor::task]
@@ -70,6 +81,10 @@ pub async fn app(stack: Stack<'static>, tls: Tls<'static>) {
         current: 100,
     };
 
+    let mut backoff = BACKOFF_INITIAL;
+
+    // Outer loop: (re)establish TCP + TLS session.
+    // Inner loop: reuse the session across uplinks — one handshake, many POSTs.
     loop {
         let address = match stack
             .dns_query(HOST, embassy_net::dns::DnsQueryType::A)
@@ -80,13 +95,13 @@ pub async fn app(stack: Stack<'static>, tls: Tls<'static>) {
                     *first_addr
                 } else {
                     println!("No addresses returned from DNS query for host: {}", HOST);
-                    Timer::after(MAIN_LOOP_DELAY).await;
+                    backoff_delay(&mut backoff).await;
                     continue;
                 }
             }
             Err(e) => {
                 println!("DNS resolution failed for host {}: {:?}", HOST, e);
-                Timer::after(MAIN_LOOP_DELAY).await;
+                backoff_delay(&mut backoff).await;
                 continue;
             }
         };
@@ -95,89 +110,89 @@ pub async fn app(stack: Stack<'static>, tls: Tls<'static>) {
 
         let mut rx_buffer = [0u8; TCP_RX_BUFFER_SIZE];
         let mut tx_buffer = [0u8; TCP_TX_BUFFER_SIZE];
-
         let client_conf = load_certificates();
 
-        loop {
-            let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-            socket.set_timeout(Some(SOCKET_TIMEOUT));
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+        socket.set_timeout(Some(SOCKET_TIMEOUT));
 
-            if let Err(e) = socket.connect(remote_endpoint).await {
-                println!("   TCP connect error: {:?}", e);
-                Timer::after(MAIN_LOOP_DELAY).await;
+        if let Err(e) = socket.connect(remote_endpoint).await {
+            println!("   TCP connect error: {:?}", e);
+            backoff_delay(&mut backoff).await;
+            continue;
+        }
+
+        let mut session = match Session::new(
+            tls.reference(),
+            socket,
+            &SessionConfig::Client(client_conf.clone()),
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("   Failed to create TLS session: {:?}", e);
+                backoff_delay(&mut backoff).await;
                 continue;
             }
+        };
 
-            let mut session = match Session::new(
-                tls.reference(),
-                socket,
-                &SessionConfig::Client(client_conf.clone()),
-            ) {
-                Ok(s) => s,
-                Err(e) => {
-                    println!("   Failed to create TLS session: {:?}", e);
-                    Timer::after(MAIN_LOOP_DELAY).await;
-                    continue;
-                }
-            };
+        match embassy_time::with_timeout(TLS_HANDSHAKE_TIMEOUT, session.connect()).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => {
+                println!("   TLS connect error: {:?}", e);
+                backoff_delay(&mut backoff).await;
+                continue;
+            }
+            Err(_) => {
+                println!("   TLS connect timed out after 15 seconds");
+                backoff_delay(&mut backoff).await;
+                continue;
+            }
+        };
 
-            match embassy_time::with_timeout(TLS_HANDSHAKE_TIMEOUT, session.connect()).await {
-                Ok(Ok(_)) => {}
-                Ok(Err(e)) => {
-                    println!("   TLS connect error: {:?}", e);
-                    Timer::after(MAIN_LOOP_DELAY).await;
-                    continue;
-                }
-                Err(_) => {
-                    println!("   TLS connect timed out after 15 seconds");
-                    Timer::after(MAIN_LOOP_DELAY).await;
-                    continue;
-                }
-            };
+        backoff = BACKOFF_INITIAL;
 
-            let request = match post_request(env!("HOST"), &uplink, None) {
+        loop {
+            let request = match post_request(HOST, &uplink, None) {
                 Ok(r) => r,
                 Err(e) => {
                     println!("   Failed to build HTTP request: {}", e);
-                    let _ = session.close().await;
-                    Timer::after(MAIN_LOOP_DELAY).await;
-                    continue;
+                    break;
                 }
-            };
-            match session.write(request.as_bytes()).await {
-                Ok(written) => {
-                    if written != request.len() {
-                        println!("   Only wrote {} of {} bytes", written, request.len());
-                    }
-                }
-                Err(e) => println!("   Failed to send request: {:?}", e),
             };
 
-            // Try to read response
+            if let Err(e) = session.write(request.as_bytes()).await {
+                println!("   Write failed: {:?}", e);
+                break;
+            }
+
             let mut buffer = [0u8; 1024];
             match embassy_time::with_timeout(HTTP_READ_TIMEOUT, session.read(&mut buffer)).await {
-                Ok(Ok(n)) => {
-                    if n > 0 {
-                        #[cfg(debug_assertions)]
-                        match core::str::from_utf8(&buffer[..n]) {
-                            Ok(s) => println!("Received response:\n---\n{}\n---", s),
-                            Err(_) => println!("   Response not UTF-8 (binary data)"),
-                        }
-                        #[cfg(not(debug_assertions))]
-                        println!("   Response received ({} bytes)", n);
-                    } else {
-                        println!("   Empty response (0 bytes)");
+                Ok(Ok(n)) if n > 0 => {
+                    #[cfg(debug_assertions)]
+                    match core::str::from_utf8(&buffer[..n]) {
+                        Ok(s) => println!("Received response:\n---\n{}\n---", s),
+                        Err(_) => println!("   Response not UTF-8 (binary data)"),
                     }
+                    #[cfg(not(debug_assertions))]
+                    println!("   Response received ({} bytes)", n);
                 }
-                Ok(Err(e)) => println!("   Read failed: {:?}", e),
-                Err(_) => println!("   Read timed out"),
-            };
-
-            if let Err(e) = session.close().await {
-                println!("   TLS close error: {:?}", e);
+                Ok(Ok(_)) => {
+                    // 0-byte read = peer closed the connection (keepalive expired).
+                    println!("   Peer closed connection — reconnecting");
+                    break;
+                }
+                Ok(Err(e)) => {
+                    println!("   Read failed: {:?}", e);
+                    break;
+                }
+                Err(_) => {
+                    println!("   Read timed out");
+                    break;
+                }
             }
 
             Timer::after(MAIN_LOOP_DELAY).await;
         }
+
+        let _ = session.close().await;
     }
 }

@@ -189,3 +189,123 @@ impl DeviceStore for DynamoDeviceStore {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn make_device(id: &str) -> DeviceRecord {
+        DeviceRecord {
+            device_id: id.into(),
+            owner_id: "owner-1".into(),
+            subject_dn: None,
+            status: "active".into(),
+            created_at: "2025-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn device_to_item_roundtrip() {
+        let device = make_device("dev-1");
+        let item = DynamoDeviceStore::device_to_item(&device);
+        let recovered = DynamoDeviceStore::item_to_device(&item).unwrap();
+        assert_eq!(recovered.device_id, "dev-1");
+        assert_eq!(recovered.owner_id, "owner-1");
+        assert_eq!(recovered.status, "active");
+        assert_eq!(recovered.created_at, "2025-01-01T00:00:00Z");
+        assert!(recovered.subject_dn.is_none());
+    }
+
+    #[test]
+    fn device_to_item_with_subject_dn() {
+        let mut device = make_device("dev-2");
+        device.subject_dn = Some("CN=device2,O=supervictor".into());
+        let item = DynamoDeviceStore::device_to_item(&device);
+        let recovered = DynamoDeviceStore::item_to_device(&item).unwrap();
+        assert_eq!(
+            recovered.subject_dn.as_deref(),
+            Some("CN=device2,O=supervictor")
+        );
+    }
+
+    #[test]
+    fn device_to_item_has_all_fields() {
+        let device = make_device("dev-1");
+        let item = DynamoDeviceStore::device_to_item(&device);
+        assert_eq!(item.len(), 4);
+        assert!(item.contains_key("device_id"));
+        assert!(item.contains_key("owner_id"));
+        assert!(item.contains_key("status"));
+        assert!(item.contains_key("created_at"));
+    }
+
+    #[test]
+    fn device_to_item_includes_subject_dn_when_present() {
+        let mut device = make_device("dev-1");
+        device.subject_dn = Some("CN=test".into());
+        let item = DynamoDeviceStore::device_to_item(&device);
+        assert_eq!(item.len(), 5);
+        assert!(item.contains_key("subject_dn"));
+    }
+
+    #[test]
+    fn item_to_device_missing_device_id() {
+        let mut item = HashMap::new();
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_missing_owner_id() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::S("dev-1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_missing_status() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::S("dev-1".into()));
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_wrong_attribute_type() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::N("123".into()));
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_empty_map() {
+        let item = HashMap::new();
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+}

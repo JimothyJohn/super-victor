@@ -42,6 +42,7 @@ fn test_edge_happy_path() {
     let args = EdgeArgs {
         verbose: false,
         dry_run: false,
+        port: None,
     };
     let code = run_edge(&args, &cfg, &runner).unwrap();
     assert_eq!(code, 0);
@@ -79,6 +80,7 @@ fn test_edge_with_port_env() {
     let args = EdgeArgs {
         verbose: false,
         dry_run: false,
+        port: None,
     };
     let code = run_edge(&args, &cfg, &runner).unwrap();
     assert_eq!(code, 0);
@@ -108,6 +110,7 @@ fn test_edge_flash_failure_returns_1() {
     let args = EdgeArgs {
         verbose: false,
         dry_run: false,
+        port: None,
     };
     let code = run_edge(&args, &cfg, &runner).unwrap();
     assert_eq!(code, 1);

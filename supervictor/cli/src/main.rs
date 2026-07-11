@@ -168,6 +168,7 @@ fn run(cli: Cli, config: &ProjectConfig, r: &dyn runner::Runner) -> Result<i32, 
             &edge::EdgeArgs {
                 verbose: cli.verbose,
                 dry_run: cli.dry_run,
+                port: std::env::var("ESPFLASH_PORT").ok(),
             },
             config,
             r,

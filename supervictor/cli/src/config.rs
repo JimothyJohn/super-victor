@@ -87,7 +87,10 @@ mod tests {
         let cfg = ProjectConfig::from_repo_root(Path::new("/tmp/repo"));
         assert_eq!(cfg.repo_root, Path::new("/tmp/repo"));
         assert_eq!(cfg.edge_dir, Path::new("/tmp/repo/supervictor/edge"));
-        assert_eq!(cfg.endpoint_dir, Path::new("/tmp/repo/supervictor/endpoint"));
+        assert_eq!(
+            cfg.endpoint_dir,
+            Path::new("/tmp/repo/supervictor/endpoint")
+        );
         assert_eq!(cfg.env_dev, Path::new("/tmp/repo/.env.dev"));
         assert_eq!(cfg.log_dir, Path::new("/tmp/repo/.logs"));
         assert_eq!(cfg.sam_local_port, 3000);

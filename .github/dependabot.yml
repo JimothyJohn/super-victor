@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # PRs land in dev via auto-merge on green CI; master promotion is manual.
+    target-branch: "dev"
+    open-pull-requests-limit: 5
+    # Group minor/patch bumps into one weekly PR; majors get their own PR.
+    groups:
+      cargo-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Pinned to =1.0.0 in supervictor/edge/Cargo.toml: esp-hal 1.1.x removed
+      # unstable APIs still used by esp-rtos 0.2 / esp-radio 0.17. Unpin there
+      # first, then drop this ignore.
+      - dependency-name: "esp-hal"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "dev"

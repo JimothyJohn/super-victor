@@ -152,3 +152,44 @@ fn display_missing_body() {
     let err = AppError::MissingBody;
     assert_eq!(format!("{err}"), "missing request body");
 }
+
+#[test]
+fn display_all_variants_exact() {
+    let cases: Vec<(AppError, &str)> = vec![
+        (AppError::MissingBody, "missing request body"),
+        (
+            AppError::InvalidPayload {
+                detail: "bad field".into(),
+                structured: None,
+            },
+            "invalid payload: bad field",
+        ),
+        (
+            AppError::DeviceAlreadyExists {
+                device_id: "dev-1".into(),
+            },
+            "device already exists: dev-1",
+        ),
+        (
+            AppError::DeviceNotFound {
+                device_id: "dev-2".into(),
+            },
+            "device not found: dev-2",
+        ),
+        (
+            AppError::DeviceNotRegistered,
+            "device not registered or inactive",
+        ),
+        (AppError::Store("db down".into()), "store error: db down"),
+        (AppError::Config("no env".into()), "config error: no env"),
+    ];
+    for (err, expected) in cases {
+        assert_eq!(format!("{err}"), expected);
+    }
+}
+
+#[test]
+fn app_error_is_std_error() {
+    fn assert_error<E: std::error::Error>(_: &E) {}
+    assert_error(&AppError::MissingBody);
+}
