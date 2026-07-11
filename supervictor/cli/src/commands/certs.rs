@@ -33,6 +33,13 @@ pub enum CertsCommand {
         /// Optional validity period in days.
         days: Option<u32>,
     },
+    /// Generate a dashboard admin certificate (OU=admin) + PKCS#12 bundle.
+    Admin {
+        /// Admin identity name (used as directory and CN).
+        name: String,
+        /// Optional validity period in days.
+        days: Option<u32>,
+    },
     /// List all generated certificates.
     List,
     /// Verify a device and server cert chain against the CA.
@@ -82,6 +89,15 @@ pub fn run_certs(
             days,
         } => {
             let mut gen_args = vec!["server", name.as_str(), host_ip.as_str()];
+            let days_str;
+            if let Some(d) = days {
+                days_str = d.to_string();
+                gen_args.push(&days_str);
+            }
+            run_gen(config, &gen_args, args.verbose, args.dry_run, r)
+        }
+        CertsCommand::Admin { name, days } => {
+            let mut gen_args = vec!["admin", name.as_str()];
             let days_str;
             if let Some(d) = days {
                 days_str = d.to_string();

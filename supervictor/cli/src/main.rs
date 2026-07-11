@@ -94,6 +94,12 @@ enum CertsCommands {
         #[arg(long, help = "Validity in days")]
         days: Option<u32>,
     },
+    /// Issue a dashboard admin cert (OU=admin) + browser .p12 bundle
+    Admin {
+        name: String,
+        #[arg(long, help = "Validity in days")]
+        days: Option<u32>,
+    },
     /// List all issued certificates
     List,
     /// Verify the mTLS certificate chain
@@ -206,6 +212,7 @@ fn run(cli: Cli, config: &ProjectConfig, r: &dyn runner::Runner) -> Result<i32, 
                     host_ip,
                     days,
                 },
+                CertsCommands::Admin { name, days } => certs::CertsCommand::Admin { name, days },
                 CertsCommands::List => certs::CertsCommand::List,
                 CertsCommands::Verify {
                     device_name,
