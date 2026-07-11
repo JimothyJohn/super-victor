@@ -337,40 +337,31 @@ cmd_onboard() { # <device-name> <owner-id> [host] [port]
 }
 
 cmd_truststore_reload() {
-    # API Gateway ignores update-domain-name when the URI hasn't changed,
-    # so swap to a temp copy, wait for the domain to settle, swap back.
-    local domain="supervictor.advin.io" bucket="supervictor"
-    local uri="s3://$bucket/truststore.pem" temp_uri="s3://$bucket/truststore-reload.pem"
+    # Versioned-bucket flow: pin the domain to the CURRENT VersionId of the
+    # canonical truststore key. Atomic — one patch, no temp-key swap. (The
+    # old swap/restore dance once failed mid-way and stranded the domain on
+    # a deleted temp object; a version pin cannot strand anything.)
+    local domain="supervictor.advin.io" bucket="supervictor" key="truststore.pem"
     command_exists aws || fail "missing: aws"
 
-    log "reloading API Gateway mTLS truststore"
-    aws s3 cp "$uri" "$temp_uri" >/dev/null || fail "truststore copy failed"
+    local vid
+    vid="$(aws s3api head-object --bucket "$bucket" --key "$key" \
+        --query VersionId --output text)" || fail "cannot read s3://$bucket/$key"
+    [[ -n "$vid" && "$vid" != "None" ]] \
+        || fail "s3://$bucket has no versioning — enable it; unversioned reloads are unsafe"
 
-    # Swap/restore runs with the temp key present; clean it up unconditionally
-    # before surfacing any failure.
-    local rc=0
-    truststore_swap_restore "$domain" "$uri" "$temp_uri" || rc=$?
-    aws s3 rm "$temp_uri" >/dev/null 2>&1 || true
-    [[ $rc -eq 0 ]] || fail "truststore reload failed"
-    log "truststore reloaded"
-}
+    log "pinning $domain truststore to s3://$bucket/$key @ $vid"
+    aws apigateway update-domain-name --domain-name "$domain" --patch-operations \
+        "op=replace,path=/mutualTlsAuthentication/truststoreUri,value=s3://$bucket/$key" \
+        "op=replace,path=/mutualTlsAuthentication/truststoreVersion,value=$vid" \
+        >/dev/null || fail "truststore update failed"
+    truststore_wait_settled "$domain" || fail "domain did not settle"
 
-truststore_swap_restore() { # <domain> <uri> <temp_uri>
-    local domain="$1" uri="$2" temp_uri="$3"
-    local patch_temp="op=replace,path=/mutualTlsAuthentication/truststoreUri,value=$temp_uri"
-    local patch_back="op=replace,path=/mutualTlsAuthentication/truststoreUri,value=$uri"
-    aws apigateway update-domain-name --domain-name "$domain" \
-        --patch-operations "$patch_temp" >/dev/null || { log "swap failed"; return 1; }
-    truststore_wait_settled "$domain" || return 1
-    aws apigateway update-domain-name --domain-name "$domain" \
-        --patch-operations "$patch_back" >/dev/null || { log "restore failed"; return 1; }
-    truststore_wait_settled "$domain" || return 1
-
-    local final
-    final="$(aws apigateway get-domain-name --domain-name "$domain" \
-        --query 'mutualTlsAuthentication.truststoreUri' --output text)"
-    [[ "$final" == "$uri" ]] || { log "URI mismatch after restore: $final"; return 1; }
-    return 0
+    local got
+    got="$(aws apigateway get-domain-name --domain-name "$domain" \
+        --query 'mutualTlsAuthentication.truststoreVersion' --output text)"
+    [[ "$got" == "$vid" ]] || fail "version mismatch after update: $got"
+    log "truststore pinned to version $vid"
 }
 
 truststore_wait_settled() { # <domain>
