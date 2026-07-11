@@ -160,6 +160,8 @@
   .pill.fresh { color: var(--green); border-color: var(--green); }
   .pill.stale { color: var(--amber); border-color: var(--amber); }
   .pill.dark  { color: var(--red); border-color: var(--red); }
+  .minifleet tr { transition: background .45s ease; }
+  .minifleet tr.blip { background: rgba(249,115,22,0.12); transition: none; }
 
   /* ── section chrome ─────────────────────────────────────── */
   section { padding: 76px 0; border-top: 1px solid var(--line); }
@@ -290,12 +292,18 @@
         <h3>Fleet status — live preview</h3>
         <div class="minifleet-wrap">
         <table class="minifleet" id="minifleet">
-          <thead><tr><th>Device</th><th>FW</th><th>Last uplink</th><th>State</th></tr></thead>
+          <thead><tr><th>Device</th><th>Uptime 24h</th><th>Last uplink</th><th>State</th></tr></thead>
           <tbody>
-            <tr><td>lathe</td><td>0.1.0</td><td class="ts">2s ago</td><td><span class="pill fresh">fresh</span></td></tr>
-            <tr><td>mill</td><td>0.1.0</td><td class="ts">11s ago</td><td><span class="pill fresh">fresh</span></td></tr>
-            <tr><td>extruder</td><td>0.0.9</td><td class="ts">46m ago</td><td><span class="pill stale">stale</span></td></tr>
-            <tr><td>press</td><td>—</td><td class="ts">3h ago</td><td><span class="pill dark">dark</span></td></tr>
+            <tr data-period="5"><td>conveyor</td><td>99.9%</td><td class="ts">1.2s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="8"><td>extruder</td><td>98.7%</td><td class="ts">3.5s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="12"><td>lathe</td><td>99.4%</td><td class="ts">6.1s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="15"><td>press</td><td>99.8%</td><td class="ts">2.8s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="18"><td>welder</td><td>99.5%</td><td class="ts">11s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="21"><td>mill</td><td>99.1%</td><td class="ts">9.4s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="30"><td>compressor</td><td>98.3%</td><td class="ts">17s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr data-period="45"><td>kiln</td><td>97.2%</td><td class="ts">28s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr><td>grinder</td><td>92.6%</td><td class="ts">46m ago</td><td><span class="pill stale">stale</span></td></tr>
+            <tr><td>packer</td><td>84.1%</td><td class="ts">3h ago</td><td><span class="pill dark">dark</span></td></tr>
           </tbody>
         </table>
         </div>
@@ -419,22 +427,29 @@ DEVICE (ESP32-C3, no_std Rust)
   }, { threshold: 0.12 });
   document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
 
-  // ticking mini fleet: ages count up; the fresh rows occasionally reset
-  var rows = document.querySelectorAll("#minifleet tbody tr");
-  var ages = [2, 11, 2760, 10800]; // seconds
-  function fmt(s) {
-    if (s < 60) return s + "s ago";
-    if (s < 3600) return Math.floor(s / 60) + "m ago";
-    return Math.floor(s / 3600) + "h ago";
+  // ticking mini fleet: each device has its own uplink period; ages tick at
+  // 4 Hz with sub-second readouts, and a row flashes when its uplink lands.
+  var rows = Array.prototype.slice.call(
+    document.querySelectorAll("#minifleet tbody tr[data-period]"));
+  var state = rows.map(function (row, i) {
+    return { row: row, period: +row.dataset.period, age: (i * 1.7) % +row.dataset.period };
+  });
+  function fmt(age) {
+    if (age < 10) return age.toFixed(1) + "s ago";
+    if (age < 60) return Math.floor(age) + "s ago";
+    return Math.floor(age / 60) + "m ago";
   }
   setInterval(function () {
-    ages = ages.map(function (a) { return a + 1; });
-    if (ages[0] > 14) ages[0] = 1;         // the lathe uplinks every ~14s
-    if (ages[1] > 23) ages[1] = 2;         // the mill every ~23s
-    rows.forEach(function (row, i) {
-      row.querySelector(".ts").textContent = fmt(ages[i]);
+    state.forEach(function (d) {
+      d.age += 0.25;
+      if (d.age >= d.period) {
+        d.age = 0;
+        d.row.classList.add("blip");
+        setTimeout(function () { d.row.classList.remove("blip"); }, 350);
+      }
+      d.row.querySelector(".ts").textContent = fmt(d.age);
     });
-  }, 1000);
+  }, 250);
 })();
 </script>
 
