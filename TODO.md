@@ -8,6 +8,15 @@ them — git history is the changelog. Every remaining item is gated; the
 
 ## P0 — Security & cost guardrails
 
+- [ ] Repair the prod domain's truststore reference: `supervictor.advin.io`
+      still points at the deleted temp key from a failed reload. One command
+      (versioned pin, run as owner):
+      `aws apigateway update-domain-name --domain-name supervictor.advin.io
+      --patch-operations
+      "op=replace,path=/mutualTlsAuthentication/truststoreUri,value=s3://supervictor/truststore.pem"
+      "op=replace,path=/mutualTlsAuthentication/truststoreVersion,value=<current VersionId>"`
+      (`Quickstart truststore-reload` does exactly this going forward).
+      **Unblocks:** owner-run — API GW domain changes are gated.
 - [ ] Billing alarm: CloudWatch `EstimatedCharges` alarm + SNS topic. Shares
       the topic/endpoint with ROADMAP Phase 2's dark-device alerting.
       **Unblocks:** an alert email/endpoint decision + account-level billing
@@ -35,9 +44,14 @@ them — git history is the changelog. Every remaining item is gated; the
       **Unblocks:** owner decision (build it vs. drop it).
 - [ ] esp ecosystem migration: bump `esp-rtos` 0.2 → 0.3 and `esp-radio`
       0.17 → 0.18, then unpin `esp-hal =1.0.0` (pinned because 1.1.x removed
-      unstable APIs the older crates call). Remove the Dependabot ignore.
+      unstable APIs the older crates call). Remove the three Dependabot
+      ignores that lift with it (esp-hal, embassy-executor, esp-alloc).
       **Unblocks:** flashable hardware on hand — CI only compile-checks the
       firmware; a scheduler/radio migration needs an on-device soak.
+- [ ] Drop the heapless-0.8 bridge in `desktop_main.rs` once serde-json-core
+      releases against heapless 0.9 (their main branch already moved; we're
+      unified on 0.9.3 everywhere else).
+      **Unblocks:** a serde-json-core release > 0.6.0.
 - [ ] OTA update path (prerequisite for cert rotation on deployed devices —
       see todo/ENTERPRISE.md and ROADMAP.md Phase 2).
       **Unblocks:** hardware + the esp migration above (A/B partition
@@ -45,6 +59,11 @@ them — git history is the changelog. Every remaining item is gated; the
 
 ## P3 — Endpoint
 
+- [ ] Dashboard UX rework: the live dashboard needs design attention before
+      it's customer-visible again — the landing page dropped its demo links
+      in the July review, and /demo still renders with placeholder device
+      names. Relink from the landing page when it's presentable.
+      **Unblocks:** a design pass (owner taste applies).
 - [ ] Fleet dashboard Phase 4 (owner-scoped views, billing summaries).
       **Unblocks:** the enterprise data model (todo/ENTERPRISE.md).
 - [ ] Dashboard on Lambda: SSE degrades to reload-fallback behind API GW
