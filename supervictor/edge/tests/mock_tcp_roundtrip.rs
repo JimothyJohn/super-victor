@@ -100,7 +100,11 @@ fn get_roundtrip_through_mock_server() {
     // Verify server received a valid GET request
     let received = server_handle.join().unwrap();
     let received_str = String::from_utf8(received).unwrap();
-    assert!(received_str.starts_with("GET / HTTP/1.0"));
+    assert!(received_str.starts_with("GET / HTTP/1.1"));
+    assert!(
+        received_str.contains("Connection: close\r\n"),
+        "one-shot GET must ask the server to close the connection"
+    );
     assert!(received_str.contains(&format!("Host: {}", host)));
 }
 
