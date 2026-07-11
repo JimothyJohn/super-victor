@@ -9,6 +9,9 @@ pub struct UplinkMessage {
     pub id: String,
     /// Sensor reading value.
     pub current: i32,
+    /// Firmware version the device is running (absent on pre-fw firmware).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fw: Option<String>,
 }
 
 /// Device registration request (CLI → endpoint).

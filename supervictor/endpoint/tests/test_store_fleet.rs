@@ -49,7 +49,7 @@ fn set_device_status_unknown_device_is_not_found() {
 }
 
 #[test]
-fn last_uplink_times_returns_max_per_device() {
+fn latest_uplinks_returns_max_per_device() {
     let store = common::test_store();
     store.put_device(device("dev-1")).unwrap();
     store.put_device(device("dev-2")).unwrap();
@@ -68,10 +68,15 @@ fn last_uplink_times_returns_max_per_device() {
         .put_uplink(uplink("dev-2", "2026-06-30T00:00:00+00:00"))
         .unwrap();
 
-    let mut times = store.last_uplink_times().unwrap();
-    times.sort();
+    let mut latest: Vec<(String, String)> = store
+        .latest_uplinks()
+        .unwrap()
+        .into_iter()
+        .map(|u| (u.device_id, u.received_at))
+        .collect();
+    latest.sort();
     assert_eq!(
-        times,
+        latest,
         vec![
             ("dev-1".to_string(), "2026-07-01T12:00:00+00:00".to_string()),
             ("dev-2".to_string(), "2026-06-30T00:00:00+00:00".to_string()),
@@ -81,7 +86,34 @@ fn last_uplink_times_returns_max_per_device() {
 }
 
 #[test]
-fn last_uplink_times_empty_store() {
+fn latest_uplinks_carries_the_max_rows_payload() {
     let store = common::test_store();
-    assert!(store.last_uplink_times().unwrap().is_empty());
+    store.put_device(device("dev-1")).unwrap();
+    store
+        .put_uplink(UplinkRecord {
+            device_id: "dev-1".into(),
+            received_at: "2026-07-01T10:00:00+00:00".into(),
+            payload: serde_json::json!({ "current": 1, "fw": "0.0.9" }),
+        })
+        .unwrap();
+    store
+        .put_uplink(UplinkRecord {
+            device_id: "dev-1".into(),
+            received_at: "2026-07-01T12:00:00+00:00".into(),
+            payload: serde_json::json!({ "current": 2, "fw": "0.1.0" }),
+        })
+        .unwrap();
+
+    let latest = store.latest_uplinks().unwrap();
+    assert_eq!(latest.len(), 1);
+    assert_eq!(
+        latest[0].payload["fw"], "0.1.0",
+        "payload must come from the newest row, not an arbitrary one"
+    );
+}
+
+#[test]
+fn latest_uplinks_empty_store() {
+    let store = common::test_store();
+    assert!(store.latest_uplinks().unwrap().is_empty());
 }

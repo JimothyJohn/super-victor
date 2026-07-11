@@ -1,6 +1,10 @@
 use heapless::String as HString;
 use serde::{Deserialize, Serialize};
 
+/// Firmware version baked in at compile time; reported with every uplink so
+/// the fleet dashboard can tell which devices need updating.
+pub const FIRMWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Telemetry payload sent from the device to the cloud API.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UplinkMessage {
@@ -8,6 +12,21 @@ pub struct UplinkMessage {
     pub id: HString<64>,
     /// Sensor reading (e.g. current in milliamps).
     pub current: i32,
+    /// Firmware version this device is running (see [`FIRMWARE_VERSION`]).
+    /// Defaults to empty when parsing pre-fw JSON (backward compatibility).
+    #[serde(default)]
+    pub fw: HString<16>,
+}
+
+impl UplinkMessage {
+    /// Build an uplink stamped with this build's firmware version.
+    pub fn new(id: HString<64>, current: i32) -> Self {
+        Self {
+            id,
+            current,
+            fw: FIRMWARE_VERSION.try_into().unwrap_or_default(),
+        }
+    }
 }
 
 /// Deserialized response from the Lambda-backed API Gateway endpoint.

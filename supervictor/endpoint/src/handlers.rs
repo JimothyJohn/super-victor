@@ -46,10 +46,14 @@ pub fn handle_uplink(
     }
 
     if let Some(s) = store {
+        let mut payload = serde_json::json!({ "current": uplink.current });
+        if let Some(ref fw) = uplink.fw {
+            payload["fw"] = serde_json::Value::String(fw.clone());
+        }
         s.put_uplink(UplinkRecord {
             device_id: uplink.id.clone(),
             received_at: now_rfc3339(),
-            payload: serde_json::json!({ "current": uplink.current }),
+            payload,
         })?;
     }
 

@@ -11,6 +11,7 @@ fn test_config(backend: &str) -> Config {
         devices_table: "devices".into(),
         messages_table: "messages".into(),
         sqlite_db_path: ":memory:".into(),
+        watchdog_interval_secs: 0,
     }
 }
 

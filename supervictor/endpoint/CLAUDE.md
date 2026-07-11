@@ -23,6 +23,10 @@ Rust API endpoint in `supervictor/endpoint/` — companion to the ESP32 edge dev
 - Fleet dashboard (`src/ui/`, feature `ui`, default-on): maud SSR + SSE at
   `/ui`, admin-only (client-cert subject must carry `OU=admin`). API-only
   builds: `--no-default-features --features sqlite`.
+- Fleet health: `GET /fleet` + `/fleet/summary` (JSON, admin mTLS, always
+  compiled) share staleness logic with the dashboard via `src/fleet.rs`;
+  `src/watchdog.rs` logs dark-device transitions on long-running deploys
+  (`WATCHDOG_INTERVAL_SECS`, 0 disables).
 - Tests use in-memory SQLite. No AWS dependencies in tests.
 - Wire contract (routes, field names) is shared with the firmware via
   `supervictor-common` — change it there, and the compiler finds every

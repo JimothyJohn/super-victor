@@ -7,6 +7,7 @@ fn uplink_roundtrip() {
     let msg = UplinkMessage {
         id: "dev-1".into(),
         current: 42,
+        fw: Some("0.1.0".into()),
     };
     let json = serde_json::to_string(&msg).unwrap();
     let back: UplinkMessage = serde_json::from_str(&json).unwrap();
@@ -18,10 +19,12 @@ fn uplink_field_names() {
     let msg = UplinkMessage {
         id: "d".into(),
         current: 0,
+        fw: None,
     };
     let val: serde_json::Value = serde_json::to_value(&msg).unwrap();
     assert!(val.get("id").is_some(), "expected 'id' key");
     assert!(val.get("current").is_some(), "expected 'current' key");
+    // fw is None here and omitted on the wire (skip_serializing_if)
     assert_eq!(val.as_object().unwrap().len(), 2);
 }
 
@@ -31,6 +34,7 @@ fn uplink_i32_extremes() {
         let msg = UplinkMessage {
             id: "x".into(),
             current: v,
+            fw: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         let back: UplinkMessage = serde_json::from_str(&json).unwrap();
@@ -220,4 +224,19 @@ fn cli_register_json_compatible_with_endpoint() {
     let parsed: RegisterDeviceRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.device_id, "dev-1");
     assert_eq!(parsed.subject_dn.as_deref(), Some("CN=dev-1,O=supervictor"));
+}
+
+#[test]
+fn uplink_fw_wire_compat_both_directions() {
+    // Old firmware → new endpoint: no fw field parses as None.
+    let old: UplinkMessage = serde_json::from_str(r#"{"id":"a","current":1}"#).unwrap();
+    assert_eq!(old.fw, None);
+    // New firmware → old readers: fw serializes as a plain extra field.
+    let new = UplinkMessage {
+        id: "a".into(),
+        current: 1,
+        fw: Some("1.2.3".into()),
+    };
+    let json = serde_json::to_string(&new).unwrap();
+    assert!(json.contains(r#""fw":"1.2.3""#));
 }

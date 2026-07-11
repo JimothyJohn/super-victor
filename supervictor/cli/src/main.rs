@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use qs::commands::{certs, dev, edge, onboard, ping, prod, staging};
+use qs::commands::{certs, dev, edge, fleet, onboard, ping, prod, staging};
 use qs::config::ProjectConfig;
 use qs::error;
 use qs::output;
@@ -47,6 +47,22 @@ enum Commands {
     Certs {
         #[command(subcommand)]
         command: CertsCommands,
+    },
+
+    /// Fleet health table over admin mTLS (GET /fleet)
+    Fleet {
+        #[arg(
+            long,
+            default_value = "nick",
+            help = "Admin cert name (certs/admins/<name>)"
+        )]
+        admin: String,
+        #[arg(long, help = "CA certificate (default: certs/ca/ca.pem if present)")]
+        ca: Option<PathBuf>,
+        #[arg(long, default_value = "localhost", help = "Server host")]
+        host: String,
+        #[arg(long, default_value_t = 443, help = "Server port")]
+        port: u16,
     },
 
     /// mTLS GET to verify the server is up
@@ -245,6 +261,22 @@ fn run(cli: Cli, config: &ProjectConfig, r: &dyn runner::Runner) -> Result<i32, 
                 r,
             )
         }
+
+        Commands::Fleet {
+            admin,
+            ca,
+            host,
+            port,
+        } => fleet::run_fleet(
+            &fleet::FleetArgs {
+                admin,
+                ca,
+                host,
+                port,
+                dry_run: cli.dry_run,
+            },
+            config,
+        ),
 
         Commands::Ping {
             certs: certs_path,

@@ -15,26 +15,21 @@ pub mod views;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-use axum::extract::{Form, Path, Request, State};
-use axum::http::{header, HeaderMap, StatusCode};
-use axum::middleware::{self, Next};
+use axum::extract::{Form, Path, State};
+use axum::http::{header, HeaderMap};
+use axum::middleware;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::Router;
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::middleware::extract_client_subject;
+use crate::fleet;
+use crate::middleware::{extract_client_subject, forbidden, require_admin, sanitize_for_log};
 use crate::routes::AppState;
 use crate::store::DeviceStore;
-use crate::time::{now_rfc3339, parse_rfc3339_unix};
 use supervictor_common::status;
-use views::{FleetRow, Staleness};
-
-/// Seconds since last uplink below which a device is "fresh".
-const FRESH_SECS: u64 = 15 * 60;
-/// Seconds since last uplink below which a device is "stale" (beyond: "dark").
-const DARK_SECS: u64 = 2 * 60 * 60;
+use views::FleetRow;
 
 const CSRF_COOKIE: &str = "sv_csrf";
 
@@ -53,43 +48,6 @@ pub fn router(state: AppState) -> Router {
         .route("/ui/assets/style.css", get(assets::stylesheet))
         .route_layer(middleware::from_fn(require_admin))
         .with_state(state)
-}
-
-// ── Admin gate ────────────────────────────────────────────────────────
-
-/// True when the DN has an `OU=admin` component. Component-wise parse, not a
-/// substring test — `CN=OU=admin` or `CN=evil,OU=admins` must not pass.
-pub fn is_admin_subject(dn: &str) -> bool {
-    dn.split(',').any(|component| {
-        let mut parts = component.trim().splitn(2, '=');
-        let key = parts.next().unwrap_or("").trim();
-        let value = parts.next().unwrap_or("").trim();
-        key.eq_ignore_ascii_case("OU") && value.eq_ignore_ascii_case("admin")
-    })
-}
-
-async fn require_admin(request: Request, next: Next) -> Response {
-    match extract_client_subject(request.headers()) {
-        Some(subject) if is_admin_subject(&subject) => next.run(request).await,
-        Some(subject) => {
-            tracing::warn!(
-                subject = %sanitize_for_log(&subject),
-                "ui access denied: non-admin certificate"
-            );
-            forbidden("admin certificate required")
-        }
-        None => forbidden("client certificate required"),
-    }
-}
-
-fn forbidden(reason: &str) -> Response {
-    (StatusCode::FORBIDDEN, format!("forbidden: {reason}")).into_response()
-}
-
-/// Strip control characters (log-injection guard) before logging
-/// user-influenced strings such as cert subjects and device ids.
-fn sanitize_for_log(s: &str) -> String {
-    s.chars().filter(|c| !c.is_control()).collect()
 }
 
 // ── CSRF (double-submit cookie) ───────────────────────────────────────
@@ -162,18 +120,23 @@ fn csrf_ok(headers: &HeaderMap, submitted: &str) -> bool {
 
 // ── Page handlers ─────────────────────────────────────────────────────
 
-/// Assemble fleet rows: one `list_devices` + one `last_uplink_times`, no N+1.
+/// Assemble fleet rows for the HTML table from a fleet snapshot.
 pub fn fleet_rows(store: &dyn DeviceStore) -> Result<Vec<FleetRow>, AppError> {
+    // Re-fetch devices for full records; snapshot carries the health fields.
     let devices = store.list_devices()?;
-    let last_uplinks: std::collections::HashMap<String, String> =
-        store.last_uplink_times()?.into_iter().collect();
-    let now = parse_rfc3339_unix(&now_rfc3339()).unwrap_or(0);
+    let health = fleet::snapshot_now(store)?;
+    let by_id: std::collections::HashMap<String, (Option<String>, fleet::Staleness)> = health
+        .into_iter()
+        .map(|d| (d.device_id, (d.last_uplink, d.staleness)))
+        .collect();
 
     Ok(devices
         .into_iter()
         .map(|device| {
-            let last_uplink = last_uplinks.get(&device.device_id).cloned();
-            let staleness = staleness_of(last_uplink.as_deref(), now);
+            let (last_uplink, staleness) = by_id
+                .get(&device.device_id)
+                .cloned()
+                .unwrap_or((None, fleet::Staleness::Unknown));
             FleetRow {
                 device,
                 last_uplink,
@@ -181,23 +144,6 @@ pub fn fleet_rows(store: &dyn DeviceStore) -> Result<Vec<FleetRow>, AppError> {
             }
         })
         .collect())
-}
-
-/// Classify a last-uplink timestamp against fixed thresholds.
-pub fn staleness_of(last_uplink: Option<&str>, now_unix: u64) -> Staleness {
-    match last_uplink.and_then(parse_rfc3339_unix) {
-        Some(at) => {
-            let age = now_unix.saturating_sub(at);
-            if age < FRESH_SECS {
-                Staleness::Fresh
-            } else if age < DARK_SECS {
-                Staleness::Stale
-            } else {
-                Staleness::Dark
-            }
-        }
-        None => Staleness::Unknown,
-    }
 }
 
 fn subject_of(headers: &HeaderMap) -> String {

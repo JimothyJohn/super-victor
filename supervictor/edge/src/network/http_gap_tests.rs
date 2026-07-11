@@ -4,10 +4,7 @@ use heapless::String as HString;
 use serde::Serialize;
 
 fn make_msg(id: &str, current: i32) -> UplinkMessage {
-    UplinkMessage {
-        id: id.try_into().unwrap(),
-        current,
-    }
+    UplinkMessage::new(id.try_into().unwrap(), current)
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -56,10 +53,7 @@ fn post_content_length_single_digit() {
 fn post_content_length_three_digits() {
     // Use max-length id to get a body > 99 bytes
     let long_id: HString<64> = core::iter::repeat_n('Z', 64).collect();
-    let msg = UplinkMessage {
-        id: long_id,
-        current: i32::MAX,
-    };
+    let msg = UplinkMessage::new(long_id, i32::MAX);
     let req = post_request("h", &msg, Some("/")).unwrap();
     let s = req.as_str();
     let cl_prefix = "Content-Length: ";

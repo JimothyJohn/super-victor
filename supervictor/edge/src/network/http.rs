@@ -200,17 +200,18 @@ mod tests {
     fn test_post_request_formatting() {
         let host = "test.host.com";
         let path = Some("/test/path");
-        let message = UplinkMessage {
-            id: "test-id".try_into().unwrap(),
-            current: 99,
-        };
+        let message = UplinkMessage::new("test-id".try_into().unwrap(), 99);
 
         let request_string = post_request(host, &message, path).unwrap();
 
         assert!(request_string.starts_with("POST /test/path HTTP/1.1\r\n"));
         assert!(request_string.contains("Host: test.host.com\r\n"));
         assert!(request_string.contains("Content-Type: application/json\r\n"));
-        assert!(request_string.contains("\r\n\r\n{\"id\":\"test-id\",\"current\":99}"));
+        assert!(request_string.contains(concat!(
+            "\r\n\r\n{\"id\":\"test-id\",\"current\":99,\"fw\":\"",
+            env!("CARGO_PKG_VERSION"),
+            "\"}"
+        )));
     }
 
     /// GET and POST speak the same dialect: HTTP/1.1 + Connection: close.

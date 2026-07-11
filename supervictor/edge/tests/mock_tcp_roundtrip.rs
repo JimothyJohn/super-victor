@@ -113,10 +113,7 @@ fn post_roundtrip_through_mock_server() {
     let (addr, server_handle) = one_shot_server(MOCK_POST_RESPONSE);
 
     let host = addr.as_str();
-    let msg = UplinkMessage {
-        id: "device-001".try_into().unwrap(),
-        current: 42,
-    };
+    let msg = UplinkMessage::new("device-001".try_into().unwrap(), 42);
     let request = post_request(host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str());
 
@@ -132,7 +129,7 @@ fn post_roundtrip_through_mock_server() {
         received_str.contains("Connection: close\r\n"),
         "one-shot POST must ask the server to close the connection"
     );
-    assert!(received_str.contains(r#"{"id":"device-001","current":42}"#));
+    assert!(received_str.contains(r#"{"id":"device-001","current":42,"fw":""#));
 }
 
 #[test]
@@ -173,10 +170,7 @@ fn post_content_length_matches_actual_body_on_wire() {
         let _ = stream.shutdown(std::net::Shutdown::Write);
     });
 
-    let msg = UplinkMessage {
-        id: "cl-verify".try_into().unwrap(),
-        current: 12345,
-    };
+    let msg = UplinkMessage::new("cl-verify".try_into().unwrap(), 12345);
     let request = post_request(&addr_clone, &msg, None).expect("failed to build POST request");
     let _ = send_and_receive(&addr, request.as_str());
     server_handle.join().unwrap();
