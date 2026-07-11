@@ -89,7 +89,9 @@ esp-radio = { version = "0.17", features = [
   "log-04",
   "unstable",
 ], optional = true }
-heapless = { version = "0.8.0", default-features = false }
+# serde feature: heapless 0.9 gates its Serialize/Deserialize impls behind
+# it (0.8 got them transitively via serde-json-core's feature unification).
+heapless = { version = "0.9.3", default-features = false, features = ["serde"] }
 static_cell = { version = "2.1.0", optional = true, features = ["nightly"] }
 serde = { version = "1.0.219", default-features = false, features = ["alloc"] }
 serde-json-core = "0.6.0"
