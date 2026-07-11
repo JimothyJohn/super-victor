@@ -69,8 +69,10 @@ is the actionable engineering list. Check items off in the PR that lands them.
 - [ ] Typed store errors: `AppError::Store(String)` is stringly-typed; a small
       enum (NotFound / Conflict / Io / Serde) preserves the HTTP mapping and
       lets handlers branch without string matching.
-- [ ] Concurrency stress test: N parallel registrations/uplinks against SQLite
-      and DynamoDB Local, asserting no lost updates or duplicate device rows.
+- [x] Concurrency stress test: 16 barrier-synced threads × contested
+      registration / distinct inserts / uplink floods / status flips, against
+      in-memory AND file-backed SQLite. DynamoDB variant waits on the
+      DynamoDB-Local CI item below.
 - [ ] Property tests (`proptest`) for payload validation — new dev-dep, run
       through dep review first.
 - [ ] DynamoDB integration tests in CI (DynamoDB Local container or moto),
