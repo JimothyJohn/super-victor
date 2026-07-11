@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["sqlite"]
+default = ["sqlite", "ui"]
 sqlite = ["rusqlite"]
 dynamo = ["aws-sdk-dynamodb", "aws-config"]
+# Server-rendered fleet dashboard (docs plan: maud templates + SSE).
+# Disable for API-only deployments: --no-default-features --features sqlite
+ui = ["maud", "futures-core"]
 
 [dependencies]
 axum = "0.8"
@@ -17,6 +20,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tower-http = { version = "0.6", features = ["trace", "compression-gzip"] }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+# maud: compile-time-checked, auto-escaping HTML. Proc-macro stack (syn/quote)
+# is already in tree via serde derive. futures-core: trait-only crate (Stream
+# for the SSE adapter), already in tree via hyper/tokio ecosystem.
+maud = { version = "0.27", features = ["axum"], optional = true }
+futures-core = { version = "0.3", optional = true }
 aws-sdk-dynamodb = { version = "1", optional = true }
 aws-config = { version = "1", optional = true }
 supervictor-common = { path = "../common", features = ["alloc"] }

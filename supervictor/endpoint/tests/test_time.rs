@@ -1,4 +1,4 @@
-use supervictor_endpoint::time::{format_rfc3339, now_rfc3339};
+use supervictor_endpoint::time::{format_rfc3339, now_rfc3339, parse_rfc3339_unix};
 
 /// Reference vectors generated with `chrono 0.4.45`'s
 /// `DateTime::<Utc>::from_timestamp(secs, nanos).to_rfc3339()` before the
@@ -95,6 +95,55 @@ fn leap_days_land_on_leap_years_only() {
     assert!(leap_years.contains(&2000), "2000 must be a leap year");
     assert!(leap_years.contains(&2024), "2024 must be a leap year");
     assert!(!leap_years.contains(&2100), "2100 must not be a leap year");
+}
+
+// ── parse_rfc3339_unix (inverse) ─────────────────────────────────────
+
+#[test]
+fn parse_inverts_format_across_170_years() {
+    // Every ~7h step from 1970 through ~2140, plus odd offsets to hit
+    // non-midnight times. Fraction is truncated by design.
+    let mut t: u64 = 0;
+    while t < 5_400_000_000 {
+        let formatted = format_rfc3339(t, 123_000_000);
+        let parsed = parse_rfc3339_unix(&formatted)
+            .unwrap_or_else(|| panic!("failed to parse own output: {formatted}"));
+        assert_eq!(parsed, t, "round-trip mismatch for {formatted}");
+        t += 25_247; // ~7h, coprime-ish step to spread across days
+    }
+}
+
+#[test]
+fn parse_accepts_z_suffix_and_space_separator() {
+    assert_eq!(
+        parse_rfc3339_unix("2025-01-01T00:00:00Z"),
+        Some(1_735_689_600)
+    );
+    assert_eq!(
+        parse_rfc3339_unix("2025-01-01 00:00:00+00:00"),
+        Some(1_735_689_600)
+    );
+    assert_eq!(parse_rfc3339_unix("1970-01-01T00:00:00Z"), Some(0));
+}
+
+#[test]
+fn parse_rejects_malformed_and_non_utc() {
+    for bad in [
+        "",
+        "not a date",
+        "2025-13-01T00:00:00Z",      // month 13
+        "2025-00-10T00:00:00Z",      // month 0
+        "2025-01-32T00:00:00Z",      // day 32
+        "2025-01-01T24:00:00Z",      // hour 24
+        "2025-01-01T00:60:00Z",      // minute 60
+        "2025-01-01T00:00:00+05:00", // non-UTC offset
+        "2025-01-01T00:00:00.abcZ",  // junk fraction
+        "2025-01-01T00:00:00junk",   // trailing garbage
+        "1969-12-31T23:59:59Z",      // pre-epoch
+        "2025-01-01",                // date only
+    ] {
+        assert_eq!(parse_rfc3339_unix(bad), None, "should reject {bad:?}");
+    }
 }
 
 #[test]

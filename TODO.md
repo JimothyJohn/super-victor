@@ -53,6 +53,15 @@ is the actionable engineering list. Check items off in the PR that lands them.
 
 ## P3 — Endpoint
 
+- [ ] `qs certs admin <name>` CLI subcommand: issue an admin client cert
+      (`OU=admin`) + PKCS#12 bundle for browser import — the dashboard's auth
+      gate is live; issuance is still a manual openssl invocation.
+- [ ] Fleet dashboard Phase 4 (owner-scoped views, billing summaries) — waits
+      on the enterprise data model (todo/ENTERPRISE.md).
+- [ ] Dashboard on Lambda: SSE degrades to reload-fallback behind API GW
+      buffering (by design); if live push matters there, that's the
+      ECS-migration trigger per todo/orchestration.md.
+
 - [ ] Typed store errors: `AppError::Store(String)` is stringly-typed; a small
       enum (NotFound / Conflict / Io / Serde) preserves the HTTP mapping and
       lets handlers branch without string matching.

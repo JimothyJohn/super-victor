@@ -19,3 +19,6 @@ pub mod routes;
 pub mod store;
 /// Minimal UTC RFC 3339 timestamp formatting (chrono replacement).
 pub mod time;
+/// Fleet dashboard: server-rendered HTML + SSE behind admin mTLS (feature `ui`).
+#[cfg(feature = "ui")]
+pub mod ui;

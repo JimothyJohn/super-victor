@@ -20,6 +20,9 @@ Rust API endpoint in `supervictor/endpoint/` — companion to the ESP32 edge dev
 - All store operations return `Result<T, AppError>`. Never panic.
 - Handlers are framework-agnostic pure functions in `handlers.rs`.
 - Store backends are feature-gated: `sqlite` (default) and `dynamo`.
+- Fleet dashboard (`src/ui/`, feature `ui`, default-on): maud SSR + SSE at
+  `/ui`, admin-only (client-cert subject must carry `OU=admin`). API-only
+  builds: `--no-default-features --features sqlite`.
 - Tests use in-memory SQLite. No AWS dependencies in tests.
 - Wire contract (routes, field names) is shared with the firmware via
   `supervictor-common` — change it there, and the compiler finds every

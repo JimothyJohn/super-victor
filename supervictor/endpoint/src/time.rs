@@ -18,6 +18,62 @@ pub fn now_rfc3339() -> String {
     format_rfc3339(now.as_secs(), now.subsec_nanos())
 }
 
+/// Parse an RFC 3339 UTC timestamp back to Unix seconds (inverse of
+/// [`format_rfc3339`], fractional seconds truncated). Accepts `Z` or
+/// `+00:00` offsets and the `T`/space separator; returns `None` for
+/// malformed input, non-UTC offsets, or pre-1970 dates. Uses Hinnant's
+/// `days_from_civil` (the counterpart of the formatter's algorithm).
+pub fn parse_rfc3339_unix(s: &str) -> Option<u64> {
+    let b = s.as_bytes();
+    if b.len() < 19
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || (b[10] != b'T' && b[10] != b' ')
+        || b[13] != b':'
+        || b[16] != b':'
+    {
+        return None;
+    }
+    let year: i64 = s.get(0..4)?.parse().ok()?;
+    let month: i64 = s.get(5..7)?.parse().ok()?;
+    let day: i64 = s.get(8..10)?.parse().ok()?;
+    let hour: u64 = s.get(11..13)?.parse().ok()?;
+    let min: u64 = s.get(14..16)?.parse().ok()?;
+    let sec: u64 = s.get(17..19)?.parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || min > 59 || sec > 60 {
+        return None;
+    }
+
+    // Anything after the seconds must be an optional fraction then a UTC offset.
+    let rest = &s[19..];
+    let (frac, off) = match rest.find(['Z', '+', '-']) {
+        Some(i) => rest.split_at(i),
+        None => (rest, ""),
+    };
+    let frac_ok = frac.is_empty()
+        || (frac.starts_with('.')
+            && frac.len() > 1
+            && frac[1..].bytes().all(|c| c.is_ascii_digit()));
+    let off_ok = off.is_empty() || off == "Z" || off == "+00:00" || off == "-00:00";
+    if !frac_ok || !off_ok {
+        return None;
+    }
+
+    // days_from_civil (Hinnant): (y, m, d) -> days since 1970-01-01
+    let y = year - i64::from(month <= 2);
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (month + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    if days < 0 {
+        return None;
+    }
+
+    Some(days as u64 * 86_400 + hour * 3_600 + min * 60 + sec)
+}
+
 /// Format a Unix timestamp (seconds + nanoseconds since epoch) as RFC 3339 UTC.
 pub fn format_rfc3339(unix_secs: u64, nanos: u32) -> String {
     let days = unix_secs / 86_400;
