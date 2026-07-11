@@ -81,6 +81,8 @@ fn admin_cert_subject_satisfies_dashboard_gate() {
     let out = run_script(&dir, &["admin", "nick"], &[("P12_PASSWORD", "pw")]);
     assert!(out.status.success(), "admin failed: {out:?}");
 
+    // RFC2253 gives stable "K=V,K=V" output on both OpenSSL 3 (Linux prints
+    // "OU = admin" by default) and LibreSSL (macOS prints "OU=admin").
     let subject = stdout(&openssl(
         &dir,
         &[
@@ -89,9 +91,13 @@ fn admin_cert_subject_satisfies_dashboard_gate() {
             "certs/admins/nick/admin.pem",
             "-noout",
             "-subject",
+            "-nameopt",
+            "RFC2253",
         ],
     ));
-    // The exact component the endpoint's is_admin_subject() matches on.
+    // The exact component the endpoint's is_admin_subject() matches on
+    // (its parser also trims spaces around '=', so both raw formats pass
+    // the gate itself).
     assert!(
         subject.contains("OU=admin"),
         "admin cert must carry OU=admin: {subject}"
