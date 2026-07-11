@@ -33,8 +33,8 @@ pub enum AppError {
     /// Device exists but is not registered or not in active status.
     DeviceNotRegistered,
 
-    /// Storage backend error (SQLite or DynamoDB).
-    Store(String),
+    /// Storage backend error (SQLite or DynamoDB), classified.
+    Store(crate::store::StoreError),
 
     /// Configuration/environment error.
     Config(String),

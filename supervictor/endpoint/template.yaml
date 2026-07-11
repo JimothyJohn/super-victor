@@ -53,6 +53,15 @@ Resources:
                 AllowMethods: "'GET,POST,OPTIONS'"
                 AllowHeaders: "'Content-Type'"
                 AllowOrigin: "'*'"
+            # Explicit throttle instead of account defaults (10k rps): a
+            # device fleet posting every 5s needs ~2 rps per 10 devices, so
+            # 100 rps steady / 200 burst is generous headroom and matches the
+            # Lambda ReservedConcurrentExecutions guardrail below.
+            MethodSettings:
+                - ResourcePath: "/*"
+                  HttpMethod: "*"
+                  ThrottlingRateLimit: 100
+                  ThrottlingBurstLimit: 200
 
     # -------------------------------------------------------------------------
     # Lambda Function (Rust binary via Lambda Web Adapter)
