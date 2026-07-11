@@ -76,10 +76,7 @@ fn sam_local_post_hello() {
         }
     };
     let (addr, host) = parse_url(&url);
-    let msg = UplinkMessage {
-        id: "sam-test-device".try_into().unwrap(),
-        current: 42,
-    };
+    let msg = UplinkMessage::new("sam-test-device".try_into().unwrap(), 42);
     let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     let parsed = parse_response(&response_str).expect("parse_response failed on SAM local POST");
@@ -99,10 +96,7 @@ fn sam_local_post_i32_max_current() {
         }
     };
     let (addr, host) = parse_url(&url);
-    let msg = UplinkMessage {
-        id: "i32-max-test".try_into().unwrap(),
-        current: i32::MAX,
-    };
+    let msg = UplinkMessage::new("i32-max-test".try_into().unwrap(), i32::MAX);
     let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     let parsed = parse_response(&response_str).expect("parse_response failed on i32::MAX POST");
@@ -139,10 +133,7 @@ fn sam_local_post_empty_id() {
         }
     };
     let (addr, host) = parse_url(&url);
-    let msg = UplinkMessage {
-        id: heapless::String::new(),
-        current: 0,
-    };
+    let msg = UplinkMessage::new(heapless::String::new(), 0);
     let request = post_request(&host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str().as_bytes());
     // Server may accept or reject empty id — either way parse_response should work

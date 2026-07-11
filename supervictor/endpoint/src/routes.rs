@@ -33,13 +33,21 @@ pub fn router(store: Arc<dyn DeviceStore>) -> Router {
         events: crate::ui::sse::channel(),
     };
 
+    // Fleet health API: admin mTLS only — it enumerates the device inventory.
+    let fleet_api = Router::new()
+        .route(wire::FLEET, get(fleet_status))
+        .route(wire::FLEET_SUMMARY, get(fleet_summary))
+        .route_layer(axum::middleware::from_fn(crate::middleware::require_admin))
+        .with_state(state.clone());
+
     let router = Router::new()
         .route(wire::HEALTH, get(health))
         .route(wire::ROOT, get(hello).post(uplink))
         .route(wire::DEVICES, get(list_devices).post(register_device))
         .route(wire::DEVICE_PATTERN, get(get_device))
         .route(wire::DEVICE_UPLINKS_PATTERN, get(get_device_uplinks))
-        .with_state(state.clone());
+        .with_state(state.clone())
+        .merge(fleet_api);
 
     #[cfg(feature = "ui")]
     let router = router.merge(crate::ui::router(state));
@@ -51,6 +59,19 @@ pub fn router(store: Arc<dyn DeviceStore>) -> Router {
 
 async fn health() -> (StatusCode, Json<serde_json::Value>) {
     (StatusCode::OK, Json(serde_json::json!({ "status": "ok" })))
+}
+
+async fn fleet_status(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<crate::fleet::FleetDevice>>, crate::error::AppError> {
+    Ok(Json(crate::fleet::snapshot_now(state.store.as_ref())?))
+}
+
+async fn fleet_summary(
+    State(state): State<AppState>,
+) -> Result<Json<crate::fleet::FleetSummary>, crate::error::AppError> {
+    let devices = crate::fleet::snapshot_now(state.store.as_ref())?;
+    Ok(Json(crate::fleet::summarize(&devices)))
 }
 
 async fn hello(ClientSubject(subject): ClientSubject) -> Json<HelloResponse> {

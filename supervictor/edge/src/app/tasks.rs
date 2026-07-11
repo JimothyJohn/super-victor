@@ -76,10 +76,7 @@ pub async fn app(stack: Stack<'static>, tls: Tls<'static>) {
         println!("Waiting to get IP address...");
     }
 
-    let uplink = UplinkMessage {
-        id: "1234567890".try_into().unwrap(),
-        current: 100,
-    };
+    let uplink = UplinkMessage::new("1234567890".try_into().unwrap(), 100);
 
     let mut backoff = BACKOFF_INITIAL;
 

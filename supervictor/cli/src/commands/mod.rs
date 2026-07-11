@@ -4,6 +4,8 @@ pub mod certs;
 pub mod dev;
 /// Build and flash embedded firmware to an ESP32-C3.
 pub mod edge;
+/// Fleet health table over admin mTLS (GET /fleet).
+pub mod fleet;
 /// End-to-end device onboarding (certs, server, register, flash, verify).
 pub mod onboard;
 /// mTLS health-check ping against a remote endpoint.

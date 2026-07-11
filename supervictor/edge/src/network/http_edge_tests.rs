@@ -4,10 +4,7 @@ use crate::network::http::{get_request, parse_response, post_request};
 use heapless::String as HString;
 
 fn make_msg(id: &str, current: i32) -> UplinkMessage {
-    UplinkMessage {
-        id: id.try_into().unwrap(),
-        current,
-    }
+    UplinkMessage::new(id.try_into().unwrap(), current)
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -183,10 +180,7 @@ fn post_i32_min_current() {
 
 #[test]
 fn post_empty_id() {
-    let msg = UplinkMessage {
-        id: HString::new(),
-        current: 1,
-    };
+    let msg = UplinkMessage::new(HString::new(), 1);
     let req = post_request("h", &msg, Some("/")).unwrap();
     assert!(req.contains(r#""id":"""#));
 }
@@ -194,10 +188,7 @@ fn post_empty_id() {
 #[test]
 fn post_max_capacity_id() {
     let long_id: HString<64> = core::iter::repeat_n('A', 64).collect();
-    let msg = UplinkMessage {
-        id: long_id,
-        current: 1,
-    };
+    let msg = UplinkMessage::new(long_id, 1);
     let req = post_request("h", &msg, Some("/")).unwrap();
     // 64 A's should be in the body
     let body_start = req.as_str().find("\r\n\r\n").unwrap() + 4;

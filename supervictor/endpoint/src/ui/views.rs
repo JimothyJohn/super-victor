@@ -4,33 +4,9 @@
 
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 
+pub use crate::fleet::Staleness;
 use crate::models::{DeviceRecord, UplinkRecord};
 use supervictor_common::status;
-
-/// How recently a device has been heard from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Staleness {
-    /// Uplinked within the fresh window.
-    Fresh,
-    /// Uplinked, but not recently.
-    Stale,
-    /// No uplink for a long time.
-    Dark,
-    /// Never uplinked, or timestamp unparseable.
-    Unknown,
-}
-
-impl Staleness {
-    /// CSS class / short label.
-    pub fn label(self) -> &'static str {
-        match self {
-            Staleness::Fresh => "fresh",
-            Staleness::Stale => "stale",
-            Staleness::Dark => "dark",
-            Staleness::Unknown => "unknown",
-        }
-    }
-}
 
 /// One row of the fleet table.
 pub struct FleetRow {

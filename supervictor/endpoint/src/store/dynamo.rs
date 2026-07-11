@@ -182,12 +182,12 @@ impl DeviceStore for DynamoDeviceStore {
     /// One query per device (`limit 1`, newest first). Fine at current fleet
     /// sizes; at 100+ devices pre-aggregate a latest-uplink item instead
     /// (TODO.md / FRONTEND plan open question).
-    fn last_uplink_times(&self) -> Result<Vec<(String, String)>, AppError> {
+    fn latest_uplinks(&self) -> Result<Vec<UplinkRecord>, AppError> {
         let devices = self.list_devices()?;
         let mut out = Vec::with_capacity(devices.len());
         for device in devices {
             if let Some(uplink) = self.get_uplinks(&device.device_id, 1)?.into_iter().next() {
-                out.push((device.device_id, uplink.received_at));
+                out.push(uplink);
             }
         }
         Ok(out)

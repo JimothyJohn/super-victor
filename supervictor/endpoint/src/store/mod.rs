@@ -28,7 +28,7 @@ pub trait DeviceStore: Send + Sync {
     /// Update a device's lifecycle status, returning the updated record.
     /// Errors with [`AppError::DeviceNotFound`] if the device does not exist.
     fn set_device_status(&self, device_id: &str, status: &str) -> Result<DeviceRecord, AppError>;
-    /// Most recent uplink timestamp per device, as `(device_id, received_at)`
-    /// pairs. One query on SQLite; per-device on DynamoDB (see impl notes).
-    fn last_uplink_times(&self) -> Result<Vec<(String, String)>, AppError>;
+    /// Most recent uplink per device (devices that never uplinked are
+    /// absent). One query on SQLite; per-device on DynamoDB (see impl notes).
+    fn latest_uplinks(&self) -> Result<Vec<UplinkRecord>, AppError>;
 }

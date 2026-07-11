@@ -1,8 +1,10 @@
 use std::convert::Infallible;
 
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRequestParts, Request};
 use axum::http::request::Parts;
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 
 /// Extract mTLS client certificate subject DN from request headers.
 ///
@@ -35,6 +37,44 @@ pub fn extract_client_subject(headers: &HeaderMap) -> Option<String> {
     }
 
     None
+}
+
+/// True when the DN has an `OU=admin` component. Component-wise parse, not a
+/// substring test — `CN=OU=admin` or `CN=evil,OU=admins` must not pass.
+pub fn is_admin_subject(dn: &str) -> bool {
+    dn.split(',').any(|component| {
+        let mut parts = component.trim().splitn(2, '=');
+        let key = parts.next().unwrap_or("").trim();
+        let value = parts.next().unwrap_or("").trim();
+        key.eq_ignore_ascii_case("OU") && value.eq_ignore_ascii_case("admin")
+    })
+}
+
+/// Route-layer gate: 403 unless the forwarded mTLS subject is an admin.
+/// Shared by the dashboard (`/ui/*`) and the fleet JSON API (`/fleet*`).
+pub async fn require_admin(request: Request, next: Next) -> Response {
+    match extract_client_subject(request.headers()) {
+        Some(subject) if is_admin_subject(&subject) => next.run(request).await,
+        Some(subject) => {
+            tracing::warn!(
+                subject = %sanitize_for_log(&subject),
+                "admin route denied: non-admin certificate"
+            );
+            forbidden("admin certificate required")
+        }
+        None => forbidden("client certificate required"),
+    }
+}
+
+/// Plain-text 403 response.
+pub fn forbidden(reason: &str) -> Response {
+    (StatusCode::FORBIDDEN, format!("forbidden: {reason}")).into_response()
+}
+
+/// Strip control characters (log-injection guard) before logging
+/// user-influenced strings such as cert subjects and device ids.
+pub fn sanitize_for_log(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control()).collect()
 }
 
 /// Axum extractor for mTLS client subject DN.

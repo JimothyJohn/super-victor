@@ -7,6 +7,8 @@
 pub mod config;
 /// Unified error type with HTTP status mapping.
 pub mod error;
+/// Fleet health: staleness classification and machine-readable snapshots.
+pub mod fleet;
 /// Framework-agnostic request handlers (pure functions).
 pub mod handlers;
 /// mTLS client certificate extraction middleware.
@@ -22,3 +24,5 @@ pub mod time;
 /// Fleet dashboard: server-rendered HTML + SSE behind admin mTLS (feature `ui`).
 #[cfg(feature = "ui")]
 pub mod ui;
+/// Periodic fleet-health logging for long-running deployments.
+pub mod watchdog;

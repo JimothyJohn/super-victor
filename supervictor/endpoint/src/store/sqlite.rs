@@ -164,21 +164,32 @@ impl DeviceStore for SqliteDeviceStore {
         })
     }
 
-    fn last_uplink_times(&self) -> Result<Vec<(String, String)>, AppError> {
+    fn latest_uplinks(&self) -> Result<Vec<UplinkRecord>, AppError> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| AppError::Store(e.to_string()))?;
+        // MAX(received_at) with bare columns: SQLite guarantees the other
+        // selected columns come from the max row (documented behavior).
         let mut stmt = conn
-            .prepare("SELECT device_id, MAX(received_at) FROM uplinks GROUP BY device_id")
-            .map_err(|e| AppError::Store(format!("last_uplink_times prepare: {e}")))?;
+            .prepare("SELECT device_id, MAX(received_at), payload FROM uplinks GROUP BY device_id")
+            .map_err(|e| AppError::Store(format!("latest_uplinks prepare: {e}")))?;
 
         let rows = stmt
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(|e| AppError::Store(format!("last_uplink_times query: {e}")))?;
+            .query_map([], |row| {
+                let payload_str: String = row.get(2)?;
+                let payload: serde_json::Value =
+                    serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
+                Ok(UplinkRecord {
+                    device_id: row.get(0)?,
+                    received_at: row.get(1)?,
+                    payload,
+                })
+            })
+            .map_err(|e| AppError::Store(format!("latest_uplinks query: {e}")))?;
 
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| AppError::Store(format!("last_uplink_times collect: {e}")))
+            .map_err(|e| AppError::Store(format!("latest_uplinks collect: {e}")))
     }
 
     fn get_uplinks(&self, device_id: &str, limit: usize) -> Result<Vec<UplinkRecord>, AppError> {

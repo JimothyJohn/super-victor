@@ -1,8 +1,8 @@
 # TODO — Engineering Roadmap
 
-Prioritized backlog of concrete improvements. Larger strategic tracks live in
-`todo/` (ENTERPRISE.md, orchestration.md, open-source-framework.md); this file
-is the actionable engineering list. Check items off in the PR that lands them.
+Prioritized backlog of concrete improvements. The scaling plan lives in
+`ROADMAP.md`; larger strategic tracks in `todo/` (ENTERPRISE.md,
+open-source-framework.md). Check items off in the PR that lands them.
 
 ## P0 — Security & cost guardrails
 
@@ -64,7 +64,7 @@ is the actionable engineering list. Check items off in the PR that lands them.
       on the enterprise data model (todo/ENTERPRISE.md).
 - [ ] Dashboard on Lambda: SSE degrades to reload-fallback behind API GW
       buffering (by design); if live push matters there, that's the
-      ECS-migration trigger per todo/orchestration.md.
+      ECS-migration trigger per ROADMAP.md Phase 3.
 
 - [ ] Typed store errors: `AppError::Store(String)` is stringly-typed; a small
       enum (NotFound / Conflict / Io / Serde) preserves the HTTP mapping and
@@ -80,8 +80,8 @@ is the actionable engineering list. Check items off in the PR that lands them.
 
 ## P4 — CI/CD & release
 
-- [ ] Release artifacts for the endpoint (Linux aarch64 for the t4g staging
-      host) — `release.yml` currently only ships the Mac CLI.
+- [x] Release artifacts for the endpoint (Linux aarch64 for the t4g staging
+      host) alongside the Mac CLI binaries.
 - [ ] `cargo-audit`/`cargo-deny` job (weekly, advisories only) — complements
       Dependabot with CVE awareness between update cycles.
 - [ ] Periodic `cargo-mutants` run; mutation-catch rate is the real coverage
@@ -94,5 +94,6 @@ is the actionable engineering list. Check items off in the PR that lands them.
 ## P5 — Enterprise track
 
 See `todo/ENTERPRISE.md` (multi-table DynamoDB, billing sync, provisioning
-workflows) and `todo/orchestration.md` (when Step Functions earns its keep —
-not before the enterprise features exist). Nothing here blocks P0–P4.
+workflows) and `ROADMAP.md` (when Step Functions and each orchestration layer
+earn their keep — not before the enterprise features exist). Nothing here
+blocks P0–P4.
