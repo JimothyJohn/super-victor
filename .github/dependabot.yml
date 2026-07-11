@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # PRs land in dev via auto-merge on green CI; master promotion is manual.
+    target-branch: "dev"
     open-pull-requests-limit: 5
     # Group minor/patch bumps into one weekly PR; majors get their own PR.
     groups:
@@ -22,3 +24,4 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    target-branch: "dev"

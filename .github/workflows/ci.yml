@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, dev]
 
 permissions:
   contents: read
@@ -34,11 +34,11 @@ jobs:
     name: Embedded build (riscv32, ESP32-C3)
     runs-on: ubuntu-latest
     env:
-      # Compile-time config baked into the firmware; CI uses the committed
-      # test-device certs and dummy WiFi/host values — compile check only.
-      CERT_PATH: certs/
-      CA_PATH: ca/AmazonRootCA1.pem
-      DEVICE_NAME: test-device
+      # Compile-time config baked into the firmware. certs/ is gitignored,
+      # so CI generates throwaway certs below — compile check only.
+      CERT_PATH: ci-certs/
+      CA_PATH: ca/ca.pem
+      DEVICE_NAME: ci-device
       HOST: ci.invalid
       SSID: ci-ssid
       PASSWORD: ci-password
@@ -49,6 +49,15 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
+      - name: Generate throwaway CI certs
+        run: |
+          mkdir -p ci-certs/ca ci-certs/devices/ci-device
+          openssl ecparam -genkey -name prime256v1 -out ci-certs/ca/ca.key
+          openssl req -x509 -new -key ci-certs/ca/ca.key -subj "/CN=ci-ca" -days 1 -out ci-certs/ca/ca.pem
+          openssl ecparam -genkey -name prime256v1 -out ci-certs/devices/ci-device/client.key
+          openssl req -new -key ci-certs/devices/ci-device/client.key -subj "/CN=ci-device" \
+            | openssl x509 -req -CA ci-certs/ca/ca.pem -CAkey ci-certs/ca/ca.key -CAcreateserial -days 1 \
+              -out ci-certs/devices/ci-device/client.pem
       - name: Check embedded firmware
         working-directory: supervictor/edge
         run: cargo check --features embedded --locked
