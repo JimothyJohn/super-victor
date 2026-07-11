@@ -3,7 +3,7 @@ use aws_sdk_dynamodb::Client;
 
 use crate::error::AppError;
 use crate::models::{DeviceRecord, UplinkRecord};
-use crate::store::DeviceStore;
+use crate::store::{DeviceStore, StoreError};
 
 /// DynamoDB-backed implementation of [`DeviceStore`](super::DeviceStore).
 pub struct DynamoDeviceStore {
@@ -61,7 +61,12 @@ impl DynamoDeviceStore {
             item.get(key)
                 .and_then(|v| v.as_s().ok())
                 .map(|s| s.to_string())
-                .ok_or_else(|| AppError::Store(format!("missing field: {key}")))
+                .ok_or_else(|| {
+                    AppError::Store(StoreError::io(
+                        "item_to_device",
+                        format!("missing field: {key}"),
+                    ))
+                })
         };
 
         Ok(DeviceRecord {
@@ -98,7 +103,7 @@ impl DeviceStore for DynamoDeviceStore {
                         device_id: record.device_id,
                     })
                 } else {
-                    Err(AppError::Store(format!("put_device: {service_err}")))
+                    Err(AppError::Store(StoreError::io("put_device", service_err)))
                 }
             }
         }
@@ -112,7 +117,7 @@ impl DeviceStore for DynamoDeviceStore {
                 .key("device_id", AttributeValue::S(device_id.to_string()))
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("get_device: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("get_device", e)))?;
 
         match result.item {
             Some(ref item) => Ok(Some(Self::item_to_device(item)?)),
@@ -122,14 +127,14 @@ impl DeviceStore for DynamoDeviceStore {
 
     fn list_devices(&self) -> Result<Vec<DeviceRecord>, AppError> {
         let result = block_on(self.client.scan().table_name(&self.devices_table).send())
-            .map_err(|e| AppError::Store(format!("list_devices: {e}")))?;
+            .map_err(|e| AppError::Store(StoreError::io("list_devices", e)))?;
 
         result.items().iter().map(Self::item_to_device).collect()
     }
 
     fn put_uplink(&self, record: UplinkRecord) -> Result<(), AppError> {
         let payload_str = serde_json::to_string(&record.payload)
-            .map_err(|e| AppError::Store(format!("serialize payload: {e}")))?;
+            .map_err(|e| AppError::Store(StoreError::serde("serialize payload", e)))?;
 
         block_on(
             self.client
@@ -140,7 +145,7 @@ impl DeviceStore for DynamoDeviceStore {
                 .item("payload", AttributeValue::S(payload_str))
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("put_uplink: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("put_uplink", e)))?;
 
         Ok(())
     }
@@ -161,9 +166,12 @@ impl DeviceStore for DynamoDeviceStore {
 
         match result {
             Ok(out) => {
-                let item = out
-                    .attributes()
-                    .ok_or_else(|| AppError::Store("set_device_status: no attributes".into()))?;
+                let item = out.attributes().ok_or_else(|| {
+                    AppError::Store(StoreError::io(
+                        "set_device_status",
+                        "no attributes returned",
+                    ))
+                })?;
                 Self::item_to_device(item)
             }
             Err(e) => {
@@ -173,7 +181,10 @@ impl DeviceStore for DynamoDeviceStore {
                         device_id: device_id.to_string(),
                     })
                 } else {
-                    Err(AppError::Store(format!("set_device_status: {service_err}")))
+                    Err(AppError::Store(StoreError::io(
+                        "set_device_status",
+                        service_err,
+                    )))
                 }
             }
         }
@@ -204,7 +215,7 @@ impl DeviceStore for DynamoDeviceStore {
                 .limit(limit as i32)
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("get_uplinks: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("get_uplinks", e)))?;
 
         result
             .items()
@@ -214,12 +225,16 @@ impl DeviceStore for DynamoDeviceStore {
                     .get("device_id")
                     .and_then(|v| v.as_s().ok())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| AppError::Store("missing device_id".into()))?;
+                    .ok_or_else(|| {
+                        AppError::Store(StoreError::io("get_uplinks", "missing device_id"))
+                    })?;
                 let received_at = item
                     .get("received_at")
                     .and_then(|v| v.as_s().ok())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| AppError::Store("missing received_at".into()))?;
+                    .ok_or_else(|| {
+                        AppError::Store(StoreError::io("get_uplinks", "missing received_at"))
+                    })?;
                 let payload_str = item
                     .get("payload")
                     .and_then(|v| v.as_s().ok())

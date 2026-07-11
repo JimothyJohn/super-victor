@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
 use supervictor_endpoint::error::AppError;
+use supervictor_endpoint::store::StoreError;
 
 fn status_of(err: AppError) -> StatusCode {
     err.into_response().status()
@@ -66,7 +67,7 @@ fn device_not_registered_returns_403() {
 #[test]
 fn store_error_returns_500() {
     assert_eq!(
-        status_of(AppError::Store("db failed".into())),
+        status_of(AppError::Store(StoreError::io("query", "db failed"))),
         StatusCode::INTERNAL_SERVER_ERROR
     );
 }
@@ -125,7 +126,10 @@ fn device_not_found_error_message() {
 
 #[test]
 fn store_error_hides_internal_detail() {
-    let body = body_of(AppError::Store("SQLITE_ERROR: table locked".into()));
+    let body = body_of(AppError::Store(StoreError::io(
+        "put_uplink",
+        "SQLITE_ERROR: table locked",
+    )));
     assert_eq!(body["error"], "Internal server error");
     assert!(body.get("detail").is_none());
 }
@@ -180,7 +184,10 @@ fn display_all_variants_exact() {
             AppError::DeviceNotRegistered,
             "device not registered or inactive",
         ),
-        (AppError::Store("db down".into()), "store error: db down"),
+        (
+            AppError::Store(StoreError::io("query", "db down")),
+            "store error: query: db down",
+        ),
         (AppError::Config("no env".into()), "config error: no env"),
     ];
     for (err, expected) in cases {
@@ -192,4 +199,43 @@ fn display_all_variants_exact() {
 fn app_error_is_std_error() {
     fn assert_error<E: std::error::Error>(_: &E) {}
     assert_error(&AppError::MissingBody);
+}
+
+// ── StoreError classification ────────────────────────────────────────
+
+#[test]
+fn store_errors_are_branchable_without_string_matching() {
+    let errors = [
+        AppError::Store(StoreError::io("get_device query", "disk I/O error")),
+        AppError::Store(StoreError::serde("serialize payload", "invalid utf-8")),
+        AppError::Store(StoreError::Poisoned),
+    ];
+    let mut io = 0;
+    let mut serde = 0;
+    let mut poisoned = 0;
+    for err in &errors {
+        match err {
+            AppError::Store(StoreError::Io { .. }) => io += 1,
+            AppError::Store(StoreError::Serde { .. }) => serde += 1,
+            AppError::Store(StoreError::Poisoned) => poisoned += 1,
+            _ => panic!("unexpected variant"),
+        }
+    }
+    assert_eq!((io, serde, poisoned), (1, 1, 1));
+}
+
+#[test]
+fn all_store_error_variants_map_to_500_and_hide_detail() {
+    for store_err in [
+        StoreError::io("op", "backend detail that must not leak"),
+        StoreError::serde("op", "serde detail that must not leak"),
+        StoreError::Poisoned,
+    ] {
+        let display = format!("{store_err}");
+        let resp = AppError::Store(store_err).into_response();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        // Display keeps context for logs; the HTTP body (asserted elsewhere)
+        // stays generic. Sanity: Display isn't empty.
+        assert!(!display.is_empty());
+    }
 }

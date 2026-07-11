@@ -13,8 +13,6 @@ them — git history is the changelog.
       local working tree (gitignored, single copy on one laptop). Move signing
       material to SSM Parameter Store / Secrets Manager; document issuance +
       rotation; keep only public certs local.
-- [ ] API Gateway request throttling / body-size limits reviewed and set
-      explicitly (today: account defaults).
 
 ## P2 — Firmware (edge)
 
@@ -25,8 +23,6 @@ them — git history is the changelog.
 - [ ] esp ecosystem migration: bump `esp-rtos` 0.2 → 0.3 and `esp-radio`
       0.17 → 0.18, then unpin `esp-hal =1.0.0` (pinned because 1.1.x removed
       unstable APIs the older crates call). Remove the Dependabot ignore.
-- [ ] `config.rs` exposes `CERT_PATH`/`CA_PATH` consts nothing reads (tls.rs
-      re-derives them via `env!`). Wire them through or drop them.
 - [ ] OTA update path (prerequisite for cert rotation on deployed devices —
       see todo/ENTERPRISE.md and ROADMAP.md Phase 2).
 
@@ -37,9 +33,6 @@ them — git history is the changelog.
 - [ ] Dashboard on Lambda: SSE degrades to reload-fallback behind API GW
       buffering (by design); if live push matters there, that's the
       ECS-migration trigger per ROADMAP.md Phase 3.
-- [ ] Typed store errors: `AppError::Store(String)` is stringly-typed; a small
-      enum (NotFound / Conflict / Io / Serde) preserves the HTTP mapping and
-      lets handlers branch without string matching.
 - [ ] Property tests (`proptest`) for payload validation — new dev-dep, run
       through dep review first.
 - [ ] DynamoDB integration tests in CI (DynamoDB Local container or moto),
@@ -48,14 +41,8 @@ them — git history is the changelog.
 
 ## P4 — CI/CD & release
 
-- [ ] `cargo-audit`/`cargo-deny` job (weekly, advisories only) — complements
-      Dependabot with CVE awareness between update cycles.
 - [ ] Periodic `cargo-mutants` run; mutation-catch rate is the real coverage
       number.
-- [ ] Post-deploy smoke as `workflow_dispatch` (Quickstart `integration`
-      against `STAGING_URL`).
-- [ ] Bump `actions/checkout` pin (current SHA targets Node 20, deprecated on
-      runners) next Dependabot cycle or manually.
 
 ## P5 — Enterprise track
 

@@ -1,0 +1,24 @@
+name: Post-deploy smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: "Base URL of the deployed endpoint (e.g. https://staging.supervictor.advin.io)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Health smoke against deployed endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
+        with:
+          toolchain: stable
+      - name: Quickstart integration (staging smoke)
+        run: STAGING_URL="${{ inputs.staging_url }}" ./Quickstart integration

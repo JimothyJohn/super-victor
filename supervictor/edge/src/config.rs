@@ -4,10 +4,8 @@ use embassy_time::Duration;
 
 /// Remote API hostname, set at compile time.
 pub const HOST: &str = env!("HOST");
-/// Path to the CA certificate chain relative to the cert root.
-pub const CA_PATH: &str = env!("CA_PATH");
-/// Root path for all certificate files.
-pub const CERT_PATH: &str = env!("CERT_PATH");
+// CERT_PATH / CA_PATH have no runtime consts: network/tls.rs consumes them
+// directly via env! inside include_str! at compile time.
 
 // --- System ---
 /// Total heap allocation in bytes for the ESP32-C3 allocator.
