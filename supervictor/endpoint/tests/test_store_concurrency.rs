@@ -67,7 +67,11 @@ fn concurrent_registration_of_same_id_has_exactly_one_winner() {
         };
     });
 
-    assert_eq!(wins.load(Ordering::SeqCst), 1, "exactly one insert must win");
+    assert_eq!(
+        wins.load(Ordering::SeqCst),
+        1,
+        "exactly one insert must win"
+    );
     assert_eq!(conflicts.load(Ordering::SeqCst), THREADS - 1);
     assert_eq!(store.list_devices().unwrap().len(), 1, "no duplicate rows");
 }
@@ -122,7 +126,11 @@ fn concurrent_uplinks_are_all_persisted() {
         .collect();
     currents.sort_unstable();
     currents.dedup();
-    assert_eq!(currents.len(), THREADS * OPS_PER_THREAD, "torn write detected");
+    assert_eq!(
+        currents.len(),
+        THREADS * OPS_PER_THREAD,
+        "torn write detected"
+    );
 }
 
 #[test]
@@ -131,7 +139,11 @@ fn concurrent_status_flips_end_in_a_valid_state() {
     store.put_device(device("toggled")).unwrap();
 
     hammer(&store, |store, thread_id| {
-        let status = if thread_id % 2 == 0 { "active" } else { "inactive" };
+        let status = if thread_id % 2 == 0 {
+            "active"
+        } else {
+            "inactive"
+        };
         for _ in 0..OPS_PER_THREAD {
             let updated = store
                 .set_device_status("toggled", status)
