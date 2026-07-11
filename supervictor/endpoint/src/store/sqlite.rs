@@ -141,6 +141,46 @@ impl DeviceStore for SqliteDeviceStore {
         Ok(())
     }
 
+    fn set_device_status(&self, device_id: &str, status: &str) -> Result<DeviceRecord, AppError> {
+        {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|e| AppError::Store(e.to_string()))?;
+            let updated = conn
+                .execute(
+                    "UPDATE devices SET status = ?2 WHERE device_id = ?1",
+                    params![device_id, status],
+                )
+                .map_err(|e| AppError::Store(format!("set_device_status: {e}")))?;
+            if updated == 0 {
+                return Err(AppError::DeviceNotFound {
+                    device_id: device_id.to_string(),
+                });
+            }
+        }
+        self.get_device(device_id)?.ok_or(AppError::DeviceNotFound {
+            device_id: device_id.to_string(),
+        })
+    }
+
+    fn last_uplink_times(&self) -> Result<Vec<(String, String)>, AppError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::Store(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT device_id, MAX(received_at) FROM uplinks GROUP BY device_id")
+            .map_err(|e| AppError::Store(format!("last_uplink_times prepare: {e}")))?;
+
+        let rows = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|e| AppError::Store(format!("last_uplink_times query: {e}")))?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| AppError::Store(format!("last_uplink_times collect: {e}")))
+    }
+
     fn get_uplinks(&self, device_id: &str, limit: usize) -> Result<Vec<UplinkRecord>, AppError> {
         let conn = self
             .conn

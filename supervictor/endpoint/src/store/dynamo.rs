@@ -145,6 +145,54 @@ impl DeviceStore for DynamoDeviceStore {
         Ok(())
     }
 
+    fn set_device_status(&self, device_id: &str, status: &str) -> Result<DeviceRecord, AppError> {
+        let result = block_on(
+            self.client
+                .update_item()
+                .table_name(&self.devices_table)
+                .key("device_id", AttributeValue::S(device_id.to_string()))
+                .update_expression("SET #s = :status")
+                .expression_attribute_names("#s", "status")
+                .expression_attribute_values(":status", AttributeValue::S(status.to_string()))
+                .condition_expression("attribute_exists(device_id)")
+                .return_values(aws_sdk_dynamodb::types::ReturnValue::AllNew)
+                .send(),
+        );
+
+        match result {
+            Ok(out) => {
+                let item = out
+                    .attributes()
+                    .ok_or_else(|| AppError::Store("set_device_status: no attributes".into()))?;
+                Self::item_to_device(item)
+            }
+            Err(e) => {
+                let service_err = e.into_service_error();
+                if service_err.is_conditional_check_failed_exception() {
+                    Err(AppError::DeviceNotFound {
+                        device_id: device_id.to_string(),
+                    })
+                } else {
+                    Err(AppError::Store(format!("set_device_status: {service_err}")))
+                }
+            }
+        }
+    }
+
+    /// One query per device (`limit 1`, newest first). Fine at current fleet
+    /// sizes; at 100+ devices pre-aggregate a latest-uplink item instead
+    /// (TODO.md / FRONTEND plan open question).
+    fn last_uplink_times(&self) -> Result<Vec<(String, String)>, AppError> {
+        let devices = self.list_devices()?;
+        let mut out = Vec::with_capacity(devices.len());
+        for device in devices {
+            if let Some(uplink) = self.get_uplinks(&device.device_id, 1)?.into_iter().next() {
+                out.push((device.device_id, uplink.received_at));
+            }
+        }
+        Ok(out)
+    }
+
     fn get_uplinks(&self, device_id: &str, limit: usize) -> Result<Vec<UplinkRecord>, AppError> {
         let result = block_on(
             self.client

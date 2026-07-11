@@ -14,18 +14,37 @@ use crate::store::DeviceStore;
 use supervictor_common::models::DeviceResponse;
 use supervictor_common::routes as wire;
 
-/// Shared application state: a thread-safe reference to the active store backend.
-pub type AppState = Arc<dyn DeviceStore>;
+/// Shared application state: the active store backend plus (with the `ui`
+/// feature) the live-uplink broadcast channel feeding the dashboard's SSE.
+#[derive(Clone)]
+pub struct AppState {
+    /// Active persistence backend.
+    pub store: Arc<dyn DeviceStore>,
+    /// Publisher for dashboard live updates; sends never block.
+    #[cfg(feature = "ui")]
+    pub events: crate::ui::sse::EventSender,
+}
 
 /// Build the axum [`Router`] with all API routes and tracing middleware.
 pub fn router(store: Arc<dyn DeviceStore>) -> Router {
-    Router::new()
+    let state = AppState {
+        store,
+        #[cfg(feature = "ui")]
+        events: crate::ui::sse::channel(),
+    };
+
+    let router = Router::new()
         .route(wire::HEALTH, get(health))
         .route(wire::ROOT, get(hello).post(uplink))
         .route(wire::DEVICES, get(list_devices).post(register_device))
         .route(wire::DEVICE_PATTERN, get(get_device))
         .route(wire::DEVICE_UPLINKS_PATTERN, get(get_device_uplinks))
-        .with_state(store)
+        .with_state(state.clone());
+
+    #[cfg(feature = "ui")]
+    let router = router.merge(crate::ui::router(state));
+
+    router
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
 }
@@ -39,7 +58,7 @@ async fn hello(ClientSubject(subject): ClientSubject) -> Json<HelloResponse> {
 }
 
 async fn uplink(
-    State(store): State<AppState>,
+    State(state): State<AppState>,
     ClientSubject(subject): ClientSubject,
     body: String,
 ) -> Result<Json<UplinkResponse>, crate::error::AppError> {
@@ -48,12 +67,21 @@ async fn uplink(
     } else {
         Some(body.as_str())
     };
-    let resp = handlers::handle_uplink(body_opt, subject, Some(store.as_ref()), false)?;
+    let resp = handlers::handle_uplink(body_opt, subject, Some(state.store.as_ref()), false)?;
+
+    // Push to dashboard SSE subscribers; never blocks, no-op with no listeners.
+    #[cfg(feature = "ui")]
+    let _ = state.events.send(crate::ui::sse::UplinkEvent {
+        device_id: resp.device_id.clone(),
+        current: resp.current,
+        received_at: crate::time::now_rfc3339(),
+    });
+
     Ok(Json(resp))
 }
 
 async fn register_device(
-    State(store): State<AppState>,
+    State(state): State<AppState>,
     body: String,
 ) -> Result<(StatusCode, Json<DeviceResponse>), crate::error::AppError> {
     let body_opt = if body.is_empty() {
@@ -61,29 +89,29 @@ async fn register_device(
     } else {
         Some(body.as_str())
     };
-    let resp = handlers::handle_register_device(body_opt, store.as_ref())?;
+    let resp = handlers::handle_register_device(body_opt, state.store.as_ref())?;
     Ok((StatusCode::CREATED, Json(resp)))
 }
 
 async fn list_devices(
-    State(store): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<DeviceResponse>>, crate::error::AppError> {
-    let resp = handlers::handle_list_devices(store.as_ref())?;
+    let resp = handlers::handle_list_devices(state.store.as_ref())?;
     Ok(Json(resp))
 }
 
 async fn get_device(
-    State(store): State<AppState>,
+    State(state): State<AppState>,
     Path(device_id): Path<String>,
 ) -> Result<Json<DeviceResponse>, crate::error::AppError> {
-    let resp = handlers::handle_get_device(&device_id, store.as_ref())?;
+    let resp = handlers::handle_get_device(&device_id, state.store.as_ref())?;
     Ok(Json(resp))
 }
 
 async fn get_device_uplinks(
-    State(store): State<AppState>,
+    State(state): State<AppState>,
     Path(device_id): Path<String>,
 ) -> Result<Json<Vec<UplinkRecord>>, crate::error::AppError> {
-    let resp = handlers::handle_get_device_uplinks(&device_id, store.as_ref(), 10)?;
+    let resp = handlers::handle_get_device_uplinks(&device_id, state.store.as_ref(), 10)?;
     Ok(Json(resp))
 }
