@@ -8,15 +8,20 @@ fn push<const N: usize>(buf: &mut HString<N>, s: &str) -> Result<(), HttpError> 
     buf.push_str(s).map_err(|_| HttpError::BufferOverflow)
 }
 
-/// Build an HTTP/1.0 GET request for the given host and optional path.
-pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<128>, HttpError> {
-    let mut request = HString::<128>::new();
+/// Build an HTTP/1.1 GET request for the given host and optional path.
+///
+/// Same dialect as [`post_request`]: HTTP/1.1 + `Connection: close`, since
+/// the device is a one-shot client that reads to EOF. Capacity is 192 — the
+/// fixed headers are ~100 bytes, leaving room for real hostnames like
+/// `staging.supervictor.advin.io` plus a path.
+pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<192>, HttpError> {
+    let mut request = HString::<192>::new();
     let path = path.unwrap_or("/");
 
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/GET
     push(&mut request, "GET ")?;
     push(&mut request, path)?;
-    push(&mut request, " HTTP/1.0\r\n")?;
+    push(&mut request, " HTTP/1.1\r\n")?;
     push(&mut request, "Host: ")?;
     push(&mut request, host)?;
     push(&mut request, "\r\n")?;
@@ -24,6 +29,7 @@ pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<128>, HttpE
         &mut request,
         "User-Agent: Uplink/0.1.0 (Platform; ESP32-C3)\r\n",
     )?;
+    push(&mut request, "Connection: close\r\n")?;
     push(&mut request, "Accept: */*\r\n\r\n")?;
     Ok(request)
 }
@@ -205,6 +211,34 @@ mod tests {
         assert!(request_string.contains("Host: test.host.com\r\n"));
         assert!(request_string.contains("Content-Type: application/json\r\n"));
         assert!(request_string.contains("\r\n\r\n{\"id\":\"test-id\",\"current\":99}"));
+    }
+
+    /// GET and POST speak the same dialect: HTTP/1.1 + Connection: close.
+    #[test]
+    fn test_get_request_dialect_matches_post() {
+        let request = get_request("test.host.com", Some("/hello")).unwrap();
+        assert!(request.starts_with("GET /hello HTTP/1.1\r\n"));
+        assert!(request.contains("Host: test.host.com\r\n"));
+        assert!(request.contains("Connection: close\r\n"));
+        assert!(request.ends_with("\r\n\r\n"));
+    }
+
+    /// Production-sized hostname + path must fit the GET buffer.
+    #[test]
+    fn test_get_request_fits_staging_hostname() {
+        let request = get_request("staging.supervictor.advin.io", Some("/hello")).unwrap();
+        assert!(request.contains("Host: staging.supervictor.advin.io\r\n"));
+    }
+
+    /// Overlong host/path overflows the buffer as an error, not truncation.
+    #[test]
+    fn test_get_request_overflow_is_an_error() {
+        const LONG_HOST: &str = concat!(
+            "very-long-subdomain-name-segment.another-long-segment",
+            ".yet-another-segment.example-domain-name.com"
+        );
+        let result = get_request(LONG_HOST, Some("/a/rather/long/path/for/good/measure"));
+        assert!(matches!(result, Err(HttpError::BufferOverflow)));
     }
 
     /// Regression: a payload that exceeds the JSON serialization buffer must

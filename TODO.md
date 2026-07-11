@@ -44,8 +44,10 @@ is the actionable engineering list. Check items off in the PR that lands them.
 - [ ] esp ecosystem migration: bump `esp-rtos` 0.2 → 0.3 and `esp-radio`
       0.17 → 0.18, then unpin `esp-hal =1.0.0` (pinned because 1.1.x removed
       unstable APIs the older crates call). Remove the Dependabot ignore.
-- [ ] Unify request builders: GET speaks HTTP/1.0, POST speaks HTTP/1.1 with
-      `Connection: close`. Pick one dialect (1.1 + close) for both.
+- [x] Unify request builders: GET speaks HTTP/1.0, POST speaks HTTP/1.1 with
+      `Connection: close`. Pick one dialect (1.1 + close) for both. (GET
+      buffer grew 128→192: fixed headers + `Connection: close` left no room
+      for real hostnames; overflow now tested.)
 - [ ] `config.rs` exposes `CERT_PATH`/`CA_PATH` consts nothing reads (tls.rs
       re-derives them via `env!`). Wire them through or drop them.
 - [ ] OTA update path (prerequisite for cert rotation on deployed devices —
