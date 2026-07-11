@@ -59,7 +59,9 @@ esp-backtrace = { version = "0.18.1", features = [
   "panic-handler",
   "println",
 ], optional = true }
-esp-hal = { version = "1", default-features = false, features = [
+# =1.0.0: esp-hal 1.1.x removed unstable APIs (InterruptHandler::new_not_nested)
+# still used by esp-rtos 0.2 / esp-radio 0.17; unpin when bumping those to 0.3/0.18
+esp-hal = { version = "=1.0.0", default-features = false, features = [
   "log-04",
   "esp32c3",
   "unstable",
