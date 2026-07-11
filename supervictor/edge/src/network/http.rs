@@ -44,19 +44,18 @@ where
     push(&mut request, host)?;
     push(&mut request, "\r\nContent-Type: application/json\r\n")?;
 
-    let json_result = serde_json_core::to_string::<T, 256>(data);
+    // One-shot client: tell HTTP/1.1 servers to close instead of keeping
+    // the connection alive while the device blocks on read-to-EOF.
+    push(&mut request, "Connection: close\r\n")?;
 
-    match json_result {
-        Ok(json) => {
-            push(&mut request, "Content-Length: ")?;
-            push_usize(&mut request, json.len())?;
-            push(&mut request, "\r\n\r\n")?;
-            push(&mut request, &json)?;
-        }
-        Err(_) => {
-            push(&mut request, "Content-Length: 0\r\n\r\n")?;
-        }
-    }
+    // A payload that doesn't fit the buffer is an error, not an empty POST —
+    // silently sending Content-Length: 0 would register a bogus uplink.
+    let json = serde_json_core::to_string::<T, 256>(data).map_err(|_| HttpError::Serialization)?;
+
+    push(&mut request, "Content-Length: ")?;
+    push_usize(&mut request, json.len())?;
+    push(&mut request, "\r\n\r\n")?;
+    push(&mut request, &json)?;
 
     Ok(request)
 }
@@ -206,5 +205,38 @@ mod tests {
         assert!(request_string.contains("Host: test.host.com\r\n"));
         assert!(request_string.contains("Content-Type: application/json\r\n"));
         assert!(request_string.contains("\r\n\r\n{\"id\":\"test-id\",\"current\":99}"));
+    }
+
+    /// Regression: a payload that exceeds the JSON serialization buffer must
+    /// surface an error, never a silent empty-body POST (Content-Length: 0)
+    /// that the server would accept as a valid-but-meaningless uplink.
+    #[test]
+    fn test_post_request_oversized_payload_is_an_error() {
+        #[derive(serde::Serialize)]
+        struct Oversized {
+            data: &'static str,
+        }
+        // 312 chars > the 256-byte serde-json-core buffer in post_request
+        const LONG: &str = concat!(
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+        );
+        let big = Oversized { data: LONG };
+
+        let result = post_request("host", &big, None);
+        assert!(
+            matches!(result, Err(HttpError::Serialization)),
+            "oversized payload must fail with Serialization error, got {result:?}"
+        );
     }
 }

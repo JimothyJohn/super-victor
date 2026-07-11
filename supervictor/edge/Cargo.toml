@@ -37,6 +37,20 @@ embedded = [
 name = "supervictor"
 path = "./src/lib.rs"
 
+# Examples target the ESP32 and need the embedded dep set; gating them keeps
+# host-side `cargo clippy/test --all-targets` runnable from the workspace root.
+[[example]]
+name = "hello_world"
+required-features = ["embedded"]
+
+[[example]]
+name = "wifi_embassy_dhcp"
+required-features = ["embedded"]
+
+[[example]]
+name = "tls_dns_dhcp_wifi"
+required-features = ["embedded"]
+
 [dependencies]
 embassy-net = { version = "0.8.0", features = [
   "dhcpv4",
