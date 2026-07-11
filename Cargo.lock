@@ -668,12 +668,6 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
-version = "0.21.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
-
-[[package]]
-name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -766,16 +760,6 @@ checksum = "5cee35f73844aa3014bb606320a6c1f010249dbdf43342fe54b5a4f6a8ed4b79"
 dependencies = [
  "memchr",
  "serde_core",
-]
-
-[[package]]
-name = "buffered-io"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5698b2eda4613b62f3aa3119805df1ca6739e00167a2600b3a234ac49b14803"
-dependencies = [
- "embedded-io 0.6.1",
- "embedded-io-async 0.6.1",
 ]
 
 [[package]]
@@ -916,7 +900,6 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
- "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1477,7 +1460,7 @@ dependencies = [
  "embassy-sync 0.7.2",
  "embassy-time",
  "embedded-io-async 0.7.0",
- "embedded-nal-async 0.9.0",
+ "embedded-nal-async",
  "heapless 0.8.0",
  "managed",
  "smoltcp",
@@ -1624,16 +1607,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
 dependencies = [
  "nb 1.1.0",
-]
-
-[[package]]
-name = "embedded-nal-async"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76959917cd2b86f40a98c28dd5624eddd1fa69d746241c8257eac428d83cb211"
-dependencies = [
- "embedded-io-async 0.6.1",
- "embedded-nal",
 ]
 
 [[package]]
@@ -3250,12 +3223,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nourl"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdf177075516a2681d344b047633cd75893126f376469f05a346acf17431eadd"
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3529,15 +3496,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
-name = "ppv-lite86"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
 name = "pretty_assertions"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3655,16 +3613,6 @@ dependencies = [
  "chacha20",
  "getrandom 0.4.3",
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "rand_chacha"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
-dependencies = [
- "ppv-lite86",
- "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -3807,26 +3755,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots",
-]
-
-[[package]]
-name = "reqwless"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb1be74cb817fa6dbda417110f575d9b9ad5488817f1eb65f2f6468fe6d5d663"
-dependencies = [
- "base64 0.21.7",
- "buffered-io",
- "embedded-io 0.6.1",
- "embedded-io-async 0.6.1",
- "embedded-nal-async 0.8.0",
- "heapless 0.8.0",
- "hex",
- "httparse",
- "log",
- "nourl",
- "rand_chacha",
- "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -4458,7 +4386,6 @@ name = "supervictor-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
- "serde",
  "serde_json",
  "supervictor-common",
  "toml",
@@ -4480,22 +4407,18 @@ dependencies = [
  "embassy-executor",
  "embassy-net",
  "embassy-time",
- "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "esp-alloc",
  "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
- "esp-metadata-generated 0.3.0",
  "esp-println",
  "esp-radio",
  "esp-rtos",
  "heapless 0.8.0",
- "log",
  "mbedtls-rs",
  "rcgen",
  "reqwest",
- "reqwless",
  "rustls 0.23.41",
  "rustls-pemfile",
  "serde",
@@ -4513,12 +4436,10 @@ dependencies = [
  "aws-sdk-dynamodb",
  "axum",
  "axum-test",
- "chrono",
  "rusqlite",
  "serde",
  "serde_json",
  "supervictor-common",
- "thiserror 2.0.18",
  "tokio",
  "tower-http",
  "tracing",

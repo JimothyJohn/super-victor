@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::time::now_rfc3339;
 
 use crate::error::AppError;
 use crate::models::{
@@ -48,7 +48,7 @@ pub fn handle_uplink(
     if let Some(s) = store {
         s.put_uplink(UplinkRecord {
             device_id: uplink.id.clone(),
-            received_at: Utc::now().to_rfc3339(),
+            received_at: now_rfc3339(),
             payload: serde_json::json!({ "current": uplink.current }),
         })?;
     }
@@ -83,7 +83,7 @@ pub fn handle_register_device(
         owner_id: req.owner_id,
         subject_dn: req.subject_dn,
         status: status::ACTIVE.into(),
-        created_at: Utc::now().to_rfc3339(),
+        created_at: now_rfc3339(),
     };
 
     let saved = store.put_device(record)?;

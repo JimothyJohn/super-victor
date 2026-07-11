@@ -5,14 +5,12 @@ use axum::Json;
 use crate::models::ErrorResponse;
 
 /// Application-level error type that maps to HTTP status codes.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum AppError {
     /// Request body was empty or missing.
-    #[error("missing request body")]
     MissingBody,
 
     /// Request payload failed validation or deserialization.
-    #[error("invalid payload: {detail}")]
     InvalidPayload {
         /// Human-readable description of the validation failure.
         detail: String,
@@ -21,31 +19,47 @@ pub enum AppError {
     },
 
     /// Attempted to register a device with a duplicate ID.
-    #[error("device already exists: {device_id}")]
     DeviceAlreadyExists {
         /// The conflicting device identifier.
         device_id: String,
     },
 
     /// No device found for the given ID.
-    #[error("device not found: {device_id}")]
     DeviceNotFound {
         /// The requested device identifier.
         device_id: String,
     },
 
     /// Device exists but is not registered or not in active status.
-    #[error("device not registered or inactive")]
     DeviceNotRegistered,
 
     /// Storage backend error (SQLite or DynamoDB).
-    #[error("store error: {0}")]
     Store(String),
 
     /// Configuration/environment error.
-    #[error("config error: {0}")]
     Config(String),
 }
+
+// Hand-rolled Display/Error impls, inspired by thiserror's #[error("...")] derive
+// (https://github.com/dtolnay/thiserror). The derive only generated these two
+// impls; reintroduce thiserror if the error surface grows #[from]/#[source] chains.
+impl core::fmt::Display for AppError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            AppError::MissingBody => f.write_str("missing request body"),
+            AppError::InvalidPayload { detail, .. } => write!(f, "invalid payload: {detail}"),
+            AppError::DeviceAlreadyExists { device_id } => {
+                write!(f, "device already exists: {device_id}")
+            }
+            AppError::DeviceNotFound { device_id } => write!(f, "device not found: {device_id}"),
+            AppError::DeviceNotRegistered => f.write_str("device not registered or inactive"),
+            AppError::Store(msg) => write!(f, "store error: {msg}"),
+            AppError::Config(msg) => write!(f, "config error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {

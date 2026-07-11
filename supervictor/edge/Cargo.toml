@@ -26,12 +26,9 @@ embedded = [
   "embassy-net",
   "embassy-executor",
   "embassy-time",
-  "embedded-io",
   "embedded-io-async",
   "mbedtls-rs",
   "esp-bootloader-esp-idf",
-  "esp-metadata-generated",
-  "reqwless",
   "static_cell",
 ]
 
@@ -51,7 +48,6 @@ embassy-net = { version = "0.8.0", features = [
 reqwest = { version = "0.12.15", optional = true, features = ["json", "rustls-tls"] }
 tokio = { version = "1.0", optional = true, features = ["full"] }
 
-embedded-io = { version = "0.7.0", optional = true }
 embedded-io-async = { version = "0.7.0", optional = true }
 esp-alloc = { version = "0.9.0", optional = true }
 esp-backtrace = { version = "0.18.1", features = [
@@ -83,11 +79,8 @@ heapless = { version = "0.8.0", default-features = false }
 static_cell = { version = "2.1.0", optional = true, features = ["nightly"] }
 serde = { version = "1.0.219", default-features = false, features = ["alloc"] }
 serde-json-core = "0.6.0"
-reqwless = { version = "0.13.0", default-features = false, optional = true, features = ["log"] }
-log = "0.4.26"
 mbedtls-rs = { git = "https://github.com/esp-rs/mbedtls-rs.git", rev = "4329f17", optional = true, features = ["log"] }
 esp-bootloader-esp-idf = { version = "0.4", optional = true, features = ["esp32c3"] }
-esp-metadata-generated = { version = "0.3", optional = true, features = ["esp32c3"] }
 rustls = { version = "0.23.26", optional = true }
 tokio-rustls = { version = "0.26.2", optional = true }
 rustls-pemfile = { version = "2.2.0", optional = true }

@@ -17,3 +17,5 @@ pub mod models;
 pub mod routes;
 /// Pluggable storage backends (SQLite, DynamoDB).
 pub mod store;
+/// Minimal UTC RFC 3339 timestamp formatting (chrono replacement).
+pub mod time;
