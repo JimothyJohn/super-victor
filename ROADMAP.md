@@ -18,12 +18,14 @@ ESP32-C3 ──mTLS──► Caddy ──► axum on t4g.micro ──► SQLite 
 ```
 
 The original pitch's "portable path" is real: one axum binary runs in Lambda
-(Web Adapter), on the staging box, or in any container. Deployment is
-`Quickstart onboard` (cert → register → flash); monitoring is `/fleet` +
-`Quickstart fleet` +
-the dashboard; sustainment is firmware-version reporting per uplink and the
-staleness watchdog. Release artifacts ship for the CLI (macOS) and the
-endpoint (Linux aarch64).
+(Web Adapter), on the staging box, or in any container. `./Quickstart` is the
+single entry point (the `qs` CLI is retired): deployment is
+`Quickstart onboard` (cert → register → flash); monitoring is `/fleet`,
+`Quickstart fleet`, and the dashboard; sustainment is firmware-version
+reporting per uplink plus the staleness watchdog. Release artifacts ship the
+endpoint for Linux aarch64 (the t4g staging host). API Gateway is explicitly
+throttled and the Lambda concurrency-capped; weekly Dependabot + cargo-audit
+watch the dependency tree.
 
 **Operating principle, unchanged: don't orchestrate what doesn't need
 orchestrating.** Each phase below has an explicit trigger; before the trigger
@@ -44,7 +46,8 @@ shows:
 - **Alerting beyond logs.** The watchdog emits structured `device went dark`
   WARNs; wire a CloudWatch metric filter + alarm (serverless path) or a
   journald → SNS relay (self-hosted) so a dark device pages instead of
-  waiting to be read.
+  waiting to be read. Pairs with the TODO P0 billing alarm — both need the
+  same SNS topic + alert-endpoint decision.
 - **Provisioning at batch scale.** `Quickstart onboard` loops fine to ~10; past
   that, a manifest-driven batch mode (CSV/TOML in, certs + registrations
   out) keeps a site install to one command.
