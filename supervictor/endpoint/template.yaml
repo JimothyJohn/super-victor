@@ -65,6 +65,9 @@ Resources:
                 - arm64
             MemorySize: 256
             Timeout: 10
+            # Cost/DoS guardrail: cap concurrency so a traffic spike can't
+            # exhaust the account-wide Lambda pool or run up the bill.
+            ReservedConcurrentExecutions: 10
             Environment:
                 Variables:
                     ENVIRONMENT: !Ref Environment

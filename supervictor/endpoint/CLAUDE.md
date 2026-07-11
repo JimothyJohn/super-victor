@@ -21,4 +21,6 @@ Rust API endpoint in `supervictor/endpoint/` — companion to the ESP32 edge dev
 - Handlers are framework-agnostic pure functions in `handlers.rs`.
 - Store backends are feature-gated: `sqlite` (default) and `dynamo`.
 - Tests use in-memory SQLite. No AWS dependencies in tests.
-- Same API surface as `cloud/` Python version.
+- Wire contract (routes, field names) is shared with the firmware via
+  `supervictor-common` — change it there, and the compiler finds every
+  callsite on both sides.
