@@ -425,9 +425,7 @@
 <span class="dir">    src/store/</span>                 <span class="comment"># SQLite + DynamoDB backends</span>
 <span class="file">    template.yaml</span>              <span class="comment"># SAM/CloudFormation</span>
 <span class="file">    docker-compose.yml</span>         <span class="comment"># local dev with Caddy mTLS</span>
-<span class="dir">  cli/</span>                          <span class="comment"># qs CLI (clap)</span>
-<span class="file">    src/main.rs</span>                <span class="comment"># entry point</span>
-<span class="dir">    src/commands/</span>              <span class="comment"># dev, edge, staging, prod, certs, ...</span>
+<span class="file">  Quickstart</span>                    <span class="comment"># single entry point: build, test, deploy, fleet ops</span>
 <span class="dir">  certs/</span>                        <span class="comment"># generated certs (gitignored)</span>
 <span class="dir">  docs/</span>                         <span class="comment"># this page</span>
   </div>
@@ -477,9 +475,9 @@
 
 <!-- CLI Pipeline -->
 <section>
-  <h2>CLI Pipeline</h2>
+  <h2>Pipeline</h2>
   <p style="color:var(--muted); margin-bottom:20px; font-size:0.9rem;">
-    The <code>qs</code> CLI orchestrates build, test, deploy, and device management through progressive stages.
+    <code>./Quickstart</code> orchestrates build, test, deploy, and device management through progressive stages.
   </p>
   <div style="overflow-x:auto">
     <table class="pipeline">
@@ -488,51 +486,51 @@
       </thead>
       <tbody>
         <tr>
-          <td>qs dev</td>
+          <td>./Quickstart dev</td>
           <td>Unit tests, build endpoint, start local server, run integration tests</td>
         </tr>
         <tr>
-          <td>qs dev --serve</td>
+          <td>./Quickstart dev --serve</td>
           <td>Same as above but keeps the server running for manual testing</td>
         </tr>
         <tr>
-          <td>qs edge</td>
+          <td>./Quickstart edge</td>
           <td>Build + flash ESP32-C3 firmware via espflash 3.3.0</td>
         </tr>
         <tr>
-          <td>qs staging</td>
+          <td>./Quickstart staging</td>
           <td>Dev gate &rarr; deploy to dev stack &rarr; integration tests against live endpoint</td>
         </tr>
         <tr>
-          <td>qs prod</td>
+          <td>./Quickstart prod</td>
           <td>Dev gate &rarr; staging gate &rarr; confirm &rarr; deploy prod &rarr; mTLS verification</td>
         </tr>
         <tr>
-          <td>qs certs ca</td>
+          <td>./Quickstart certs ca</td>
           <td>Initialize the root CA for mTLS</td>
         </tr>
         <tr>
-          <td>qs certs device &lt;name&gt;</td>
+          <td>./Quickstart certs device &lt;name&gt;</td>
           <td>Issue a device client certificate</td>
         </tr>
         <tr>
-          <td>qs certs server &lt;name&gt;</td>
+          <td>./Quickstart certs server &lt;name&gt;</td>
           <td>Issue a server/TLS certificate</td>
         </tr>
         <tr>
-          <td>qs certs verify</td>
+          <td>./Quickstart certs verify</td>
           <td>Verify the mTLS certificate chain</td>
         </tr>
         <tr>
-          <td>qs certs handshake</td>
+          <td>./Quickstart certs handshake</td>
           <td>Simulate mTLS handshake against a running server</td>
         </tr>
         <tr>
-          <td>qs ping</td>
+          <td>./Quickstart ping</td>
           <td>mTLS GET to verify the server is reachable</td>
         </tr>
         <tr>
-          <td>qs onboard</td>
+          <td>./Quickstart onboard</td>
           <td>End-to-end device onboarding (certs + flash + verify)</td>
         </tr>
       </tbody>
@@ -560,7 +558,7 @@
     <div class="tier">
       <h3><span class="dot" style="background:var(--purple)"></span> Remote / mTLS</h3>
       <p>HTTPS + client certs against the deployed production endpoint.</p>
-      <p><code>qs ping --certs certs/device/</code></p>
+      <p><code>./Quickstart ping --certs certs/device/</code></p>
     </div>
   </div>
 </section>
@@ -588,13 +586,13 @@
 <section>
   <h2>Certificate Management</h2>
   <p style="color:var(--muted); margin-bottom:16px; font-size:0.9rem;">
-    The <code>qs certs</code> subcommand manages the full mTLS certificate lifecycle.
+    The <code>./Quickstart certs</code> subcommand manages the full mTLS certificate lifecycle.
   </p>
-  <pre>qs certs ca                          <span style="color:#52525b"># Create root CA</span>
-qs certs device esp32                <span style="color:#52525b"># Issue device cert</span>
-qs certs server caddy                <span style="color:#52525b"># Issue server cert</span>
-qs certs verify                      <span style="color:#52525b"># Verify cert chain</span>
-qs certs handshake                   <span style="color:#52525b"># Simulate mTLS handshake</span></pre>
+  <pre>./Quickstart certs ca                          <span style="color:#52525b"># Create root CA</span>
+./Quickstart certs device esp32                <span style="color:#52525b"># Issue device cert</span>
+./Quickstart certs server caddy                <span style="color:#52525b"># Issue server cert</span>
+./Quickstart certs verify                      <span style="color:#52525b"># Verify cert chain</span>
+./Quickstart certs handshake                   <span style="color:#52525b"># Simulate mTLS handshake</span></pre>
 </section>
 
 <!-- Quick Start -->
@@ -610,28 +608,27 @@ cd supervictor</pre>
     </div>
     <div class="step">
       <div class="step-content">
-        <p>Build the CLI</p>
-        <pre>cd cli && cargo build --release
-alias qs=./target/release/qs</pre>
+        <p>Check the toolchain</p>
+        <pre>./Quickstart install</pre>
       </div>
     </div>
     <div class="step">
       <div class="step-content">
         <p>Generate certificates and start the local endpoint</p>
-        <pre>qs certs ca && qs certs device esp32 && qs certs server caddy
-qs dev --serve</pre>
+        <pre>./Quickstart certs ca && ./Quickstart certs device esp32 && ./Quickstart certs server caddy
+./Quickstart dev --serve</pre>
       </div>
     </div>
     <div class="step">
       <div class="step-content">
         <p>Flash the device</p>
-        <pre>qs edge</pre>
+        <pre>./Quickstart edge</pre>
       </div>
     </div>
     <div class="step">
       <div class="step-content">
         <p>Deploy to production (when ready)</p>
-        <pre>qs prod</pre>
+        <pre>./Quickstart prod</pre>
       </div>
     </div>
   </div>

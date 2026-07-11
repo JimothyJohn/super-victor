@@ -119,6 +119,41 @@ gen_admin() { # <name> [days]
     fi
 }
 
+
+verify_chain() { # [device_name] [server_name]
+    local device="${1:-esp32}" server="${2:-caddy}" rc=0
+    local ca="$CERTS_DIR/ca/ca.pem"
+    [ -f "$ca" ] || die "no CA at $ca"
+    log "verify root CA"
+    openssl verify -CAfile "$ca" "$ca" || rc=1
+    log "verify server cert ($server) against CA"
+    openssl verify -CAfile "$ca" "$CERTS_DIR/servers/$server/server.pem" || rc=1
+    log "verify device cert ($device) against CA"
+    openssl verify -CAfile "$ca" "$CERTS_DIR/devices/$device/client.pem" || rc=1
+    log "server cert SAN:"
+    openssl x509 -in "$CERTS_DIR/servers/$server/server.pem" -noout -ext subjectAltName || rc=1
+    [ "$rc" -eq 0 ] && log "chain OK" || die "some checks failed"
+}
+
+handshake() { # <host> <port> [device_name] [tls_version e.g. tls1_3]
+    local host="${1:?usage: handshake <host> <port> [device] [tls1_2|tls1_3]}"
+    local port="${2:?usage: handshake <host> <port> [device] [tls1_2|tls1_3]}"
+    local device="${3:-esp32}" tlsver="${4:-tls1_3}"
+    local ca="$CERTS_DIR/ca/ca.pem"
+    local dir="$CERTS_DIR/devices/$device"
+    log "mTLS handshake to $host:$port as $device ($tlsver)"
+    local out
+    out="$(openssl s_client -connect "$host:$port" \
+        -cert "$dir/client.pem" -key "$dir/client.key" -CAfile "$ca" \
+        "-$tlsver" </dev/null 2>&1)" || true
+    if printf '%s' "$out" | grep -q "Verify return code: 0 (ok)"; then
+        log "handshake OK — Verify return code: 0 (ok)"
+    else
+        printf '%s\n' "$out" | grep "Verify return code:" || printf '%s\n' "$out" | tail -3
+        die "handshake failed"
+    fi
+}
+
 list_certs() {
     [ -d "$CERTS_DIR" ] || die "no $CERTS_DIR directory"
     find "$CERTS_DIR" -name '*.pem' ! -name 'AmazonRootCA1.pem' | sort | while read -r pem; do
@@ -138,6 +173,8 @@ Modes:
   server <name> <host> [days] Issue a server TLS cert      (OU=Servers, SAN)
   admin  <name> [days]        Issue a dashboard admin cert (OU=admin) + .p12
   list                        List issued certs with subjects and expiry
+  verify [device] [server]    Verify the cert chain against the CA
+  handshake <host> <port> [device] [tlsver]  Live mTLS handshake test
 
 Env: CERTS_DIR (default: certs), FORCE=1 to overwrite, CA_DAYS,
      P12_PASSWORD (admin mode; random + printed once if unset)
@@ -150,6 +187,8 @@ device)  [ $# -ge 2 ] || die "usage: gen_certs.sh device <name> [days]"; gen_dev
 server)  [ $# -ge 3 ] || die "usage: gen_certs.sh server <name> <host> [days]"; gen_server "$2" "$3" "${4:-}" ;;
 admin)   [ $# -ge 2 ] || die "usage: gen_certs.sh admin <name> [days]"; gen_admin "$2" "${3:-}" ;;
 list)    list_certs ;;
+verify)  verify_chain "${2:-}" "${3:-}" ;;
+handshake) shift; handshake "$@" ;;
 -h|--help|help|"") usage ;;
 *) usage; die "unknown mode: $1" ;;
 esac
