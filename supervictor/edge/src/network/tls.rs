@@ -5,9 +5,16 @@ use mbedtls_rs::{Certificate, ClientSessionConfig, Credentials, PrivateKey, TlsV
 /// Load CA chain, client certificate, and private key from compile-time paths
 /// and return a configured mTLS session config.
 pub fn load_certificates() -> ClientSessionConfig<'static> {
-    // CA chain — null-terminated PEM wrapped as CStr
+    // CA chain — null-terminated PEM wrapped as CStr.
+    // Paths are anchored to the crate manifest (…/supervictor/edge) so builds
+    // are cwd-independent: CERT_PATH is repo-root-relative, e.g. "certs/".
     let ca_chain_pem = concat!(
-        include_str!(concat!("../../../", env!("CERT_PATH"), env!("CA_PATH"))),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../",
+            env!("CERT_PATH"),
+            env!("CA_PATH")
+        )),
         "\0"
     );
     let ca_chain_cstr = unsafe { CStr::from_bytes_with_nul_unchecked(ca_chain_pem.as_bytes()) };
@@ -31,7 +38,8 @@ pub fn load_certificates() -> ClientSessionConfig<'static> {
     // Client certificate
     let client_cert_pem = concat!(
         include_str!(concat!(
-            "../../../",
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../",
             env!("CERT_PATH"),
             "devices/",
             env!("DEVICE_NAME"),
@@ -45,7 +53,8 @@ pub fn load_certificates() -> ClientSessionConfig<'static> {
     // Client private key
     let client_key_pem = concat!(
         include_str!(concat!(
-            "../../../",
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../",
             env!("CERT_PATH"),
             "devices/",
             env!("DEVICE_NAME"),

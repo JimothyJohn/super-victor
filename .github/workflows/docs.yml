@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
         with:
@@ -30,19 +30,23 @@ jobs:
       - name: Build docs (endpoint)
         run: cargo doc -p supervictor-endpoint --features sqlite --no-deps --target x86_64-unknown-linux-gnu
 
-      - name: Build docs (cli)
-        run: cargo doc -p supervictor-cli --no-deps --target x86_64-unknown-linux-gnu
-
-      - name: Assemble doc output
+      - name: Render dashboard demo (static, seeded)
         run: |
-          cp -r target/riscv32imc-unknown-none-elf/doc/supervictor_common \
-            target/x86_64-unknown-linux-gnu/doc/ 2>/dev/null || true
+          mkdir -p site
+          cargo run -p supervictor-endpoint --example render_demo -- site/demo
+
+      - name: Assemble site (landing page + demo + rustdoc under /api)
+        run: |
+          cp -r docs/* site/
+          mkdir -p site/api
+          cp -r target/doc/* site/api/ 2>/dev/null || true
+          cp -r target/x86_64-unknown-linux-gnu/doc/* site/api/ 2>/dev/null || true
           echo '<meta http-equiv="refresh" content="0;url=supervictor_endpoint/index.html">' \
-            > target/x86_64-unknown-linux-gnu/doc/index.html
+            > site/api/index.html
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
-          path: target/x86_64-unknown-linux-gnu/doc
+          path: site
 
   deploy:
     needs: build

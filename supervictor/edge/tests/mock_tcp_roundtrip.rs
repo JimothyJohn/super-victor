@@ -89,7 +89,7 @@ fn get_roundtrip_through_mock_server() {
     let (addr, server_handle) = one_shot_server(MOCK_GET_RESPONSE);
 
     let host = addr.as_str();
-    let request = get_request(host, None);
+    let request = get_request(host, None).expect("failed to build GET request");
     let response_str = send_and_receive(&addr, request.as_str());
 
     let parsed = parse_response(&response_str).expect("parse_response failed");
@@ -100,7 +100,11 @@ fn get_roundtrip_through_mock_server() {
     // Verify server received a valid GET request
     let received = server_handle.join().unwrap();
     let received_str = String::from_utf8(received).unwrap();
-    assert!(received_str.starts_with("GET / HTTP/1.0"));
+    assert!(received_str.starts_with("GET / HTTP/1.1"));
+    assert!(
+        received_str.contains("Connection: close\r\n"),
+        "one-shot GET must ask the server to close the connection"
+    );
     assert!(received_str.contains(&format!("Host: {}", host)));
 }
 
@@ -109,11 +113,8 @@ fn post_roundtrip_through_mock_server() {
     let (addr, server_handle) = one_shot_server(MOCK_POST_RESPONSE);
 
     let host = addr.as_str();
-    let msg = UplinkMessage {
-        id: "device-001".try_into().unwrap(),
-        current: 42,
-    };
-    let request = post_request(host, &msg, None);
+    let msg = UplinkMessage::new("device-001".try_into().unwrap(), 42);
+    let request = post_request(host, &msg, None).expect("failed to build POST request");
     let response_str = send_and_receive(&addr, request.as_str());
 
     let parsed = parse_response(&response_str).expect("parse_response failed");
@@ -124,7 +125,11 @@ fn post_roundtrip_through_mock_server() {
     let received = server_handle.join().unwrap();
     let received_str = String::from_utf8(received).unwrap();
     assert!(received_str.starts_with("POST / HTTP/1.1"));
-    assert!(received_str.contains(r#"{"id":"device-001","current":42}"#));
+    assert!(
+        received_str.contains("Connection: close\r\n"),
+        "one-shot POST must ask the server to close the connection"
+    );
+    assert!(received_str.contains(r#"{"id":"device-001","current":42,"fw":""#));
 }
 
 #[test]
@@ -165,11 +170,8 @@ fn post_content_length_matches_actual_body_on_wire() {
         let _ = stream.shutdown(std::net::Shutdown::Write);
     });
 
-    let msg = UplinkMessage {
-        id: "cl-verify".try_into().unwrap(),
-        current: 12345,
-    };
-    let request = post_request(&addr_clone, &msg, None);
+    let msg = UplinkMessage::new("cl-verify".try_into().unwrap(), 12345);
+    let request = post_request(&addr_clone, &msg, None).expect("failed to build POST request");
     let _ = send_and_receive(&addr, request.as_str());
     server_handle.join().unwrap();
 }
@@ -178,7 +180,7 @@ fn post_content_length_matches_actual_body_on_wire() {
 fn server_receives_correct_host_header() {
     let (addr, server_handle) = one_shot_server(MOCK_GET_RESPONSE);
 
-    let request = get_request(&addr, Some("/"));
+    let request = get_request(&addr, Some("/")).expect("failed to build GET request");
     let _ = send_and_receive(&addr, request.as_str());
 
     let received = server_handle.join().unwrap();
@@ -195,8 +197,8 @@ fn parallel_servers_no_cross_contamination() {
     let (addr1, server1) = one_shot_server(MOCK_GET_RESPONSE);
     let (addr2, server2) = one_shot_server(MOCK_POST_RESPONSE);
 
-    let req1 = get_request(&addr1, Some("/first"));
-    let req2 = get_request(&addr2, Some("/second"));
+    let req1 = get_request(&addr1, Some("/first")).expect("failed to build GET request");
+    let req2 = get_request(&addr2, Some("/second")).expect("failed to build GET request");
 
     let resp1 = send_and_receive(&addr1, req1.as_str());
     let resp2 = send_and_receive(&addr2, req2.as_str());
@@ -228,7 +230,7 @@ fn large_body_near_capacity() {
     let response: &'static str = Box::leak(response.into_boxed_str());
 
     let (addr, _server) = one_shot_server(response);
-    let req = get_request(&addr, Some("/"));
+    let req = get_request(&addr, Some("/")).expect("failed to build GET request");
     let resp_str = send_and_receive(&addr, req.as_str());
     let parsed = parse_response(&resp_str).unwrap();
     assert_eq!(parsed.body.len(), 1020);
@@ -250,7 +252,7 @@ fn server_closes_immediately_returns_error_or_empty() {
         .set_read_timeout(Some(std::time::Duration::from_secs(2)))
         .unwrap();
 
-    let req = get_request(&addr, Some("/"));
+    let req = get_request(&addr, Some("/")).expect("failed to build GET request");
     let _ = stream.write_all(req.as_str().as_bytes());
 
     let mut response = String::new();

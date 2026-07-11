@@ -4,10 +4,8 @@ use embassy_time::Duration;
 
 /// Remote API hostname, set at compile time.
 pub const HOST: &str = env!("HOST");
-/// Path to the CA certificate chain relative to the cert root.
-pub const CA_PATH: &str = env!("CA_PATH");
-/// Root path for all certificate files.
-pub const CERT_PATH: &str = env!("CERT_PATH");
+// CERT_PATH / CA_PATH have no runtime consts: network/tls.rs consumes them
+// directly via env! inside include_str! at compile time.
 
 // --- System ---
 /// Total heap allocation in bytes for the ESP32-C3 allocator.
@@ -53,8 +51,12 @@ pub const HTTP_REQUEST_BUFFER_CAPACITY: usize = 512;
 pub const HTTP_RESPONSE_BUFFER_CAPACITY: usize = 1024;
 
 // --- Application Logic ---
-/// Delay between iterations of the main uplink loop.
+/// Delay between iterations of the main uplink loop on success.
 pub const MAIN_LOOP_DELAY: Duration = Duration::from_millis(5000);
+/// Initial backoff delay after a transient failure (DNS, TCP, TLS, HTTP).
+pub const BACKOFF_INITIAL: Duration = Duration::from_secs(1);
+/// Maximum backoff delay — caps exponential growth.
+pub const BACKOFF_MAX: Duration = Duration::from_secs(60);
 /// Maximum byte length of a single JSON map key.
 pub const JSON_MAP_KEY_CAPACITY: usize = 8;
 /// Maximum byte length of a single JSON map value.

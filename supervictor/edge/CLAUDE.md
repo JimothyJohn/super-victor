@@ -2,11 +2,15 @@
 
 ## Commands
 ```
-cargo test --lib --target aarch64-apple-darwin   # Run tests (NOT the default ESP32 target)
-cargo run --bin supervictor-embedded --features embedded   # Build + flash via espflash 3.3.0
+../../Quickstart                                 # Full pipeline from repo root (lint, build, test)
+cargo test --target aarch64-apple-darwin         # Run tests (NOT the default ESP32 target)
+cargo run --bin supervictor-embedded --features embedded   # Build + flash via espflash
 cargo run --bin supervictor-desktop --features desktop     # Desktop mTLS test client
-cargo clippy --target aarch64-apple-darwin       # Lint
+cargo clippy --all-targets --target aarch64-apple-darwin   # Lint (examples are feature-gated)
 ```
+Embedded builds read SSID/HOST/CERT_PATH/... from the environment at compile
+time — load them with `set -a; source ../../.env.dev` first (Quickstart does
+this automatically). CERT_PATH is repo-root-relative.
 
 ## no_std Constraints
 - Library code is `#![no_std]` — no `String`, `Vec`, `format!`, or `std::` imports

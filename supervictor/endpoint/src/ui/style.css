@@ -1,0 +1,93 @@
+/* Fleet dashboard — palette shared with docs/index.html */
+:root {
+  --bg: #0e0e10;
+  --surface: #18181b;
+  --border: #27272a;
+  --text: #e4e4e7;
+  --muted: #a1a1aa;
+  --accent: #f97316;
+  --accent-dim: #c2410c;
+  --green: #22c55e;
+  --blue: #3b82f6;
+  --red: #ef4444;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+}
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 1.1rem; margin: 0; }
+header h1 a { color: var(--accent); text-decoration: none; }
+header .subject { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+main { padding: 1.5rem; max-width: 72rem; margin: 0 auto; }
+h2 { font-size: 1rem; color: var(--muted); }
+table { border-collapse: collapse; width: 100%; }
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+th { color: var(--muted); font-weight: normal; font-size: 0.8rem; }
+a { color: var(--accent); }
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+}
+.badge.active { color: var(--green); border-color: var(--green); }
+.badge.inactive { color: var(--red); border-color: var(--red); }
+.badge.fresh { color: var(--green); }
+.badge.stale { color: var(--accent); }
+.badge.dark { color: var(--red); }
+.badge.unknown { color: var(--muted); }
+form.inline { display: inline; }
+button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+button:hover { border-color: var(--accent); }
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 1.5rem 0;
+  padding: 1rem;
+}
+legend { color: var(--muted); padding: 0 0.5rem; }
+input[type="text"] {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  margin-right: 0.5rem;
+}
+.sparkline polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.meta dt { color: var(--muted); font-size: 0.8rem; }
+.meta dd { margin: 0 0 0.75rem 0; }
+#live-dot {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+#live-dot.connected { color: var(--green); }

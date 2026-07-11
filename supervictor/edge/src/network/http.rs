@@ -8,15 +8,20 @@ fn push<const N: usize>(buf: &mut HString<N>, s: &str) -> Result<(), HttpError> 
     buf.push_str(s).map_err(|_| HttpError::BufferOverflow)
 }
 
-/// Build an HTTP/1.0 GET request for the given host and optional path.
-pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<128>, HttpError> {
-    let mut request = HString::<128>::new();
+/// Build an HTTP/1.1 GET request for the given host and optional path.
+///
+/// Same dialect as [`post_request`]: HTTP/1.1 + `Connection: close`, since
+/// the device is a one-shot client that reads to EOF. Capacity is 192 — the
+/// fixed headers are ~100 bytes, leaving room for real hostnames like
+/// `staging.supervictor.advin.io` plus a path.
+pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<192>, HttpError> {
+    let mut request = HString::<192>::new();
     let path = path.unwrap_or("/");
 
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/GET
     push(&mut request, "GET ")?;
     push(&mut request, path)?;
-    push(&mut request, " HTTP/1.0\r\n")?;
+    push(&mut request, " HTTP/1.1\r\n")?;
     push(&mut request, "Host: ")?;
     push(&mut request, host)?;
     push(&mut request, "\r\n")?;
@@ -24,6 +29,7 @@ pub fn get_request(host: &str, path: Option<&str>) -> Result<HString<128>, HttpE
         &mut request,
         "User-Agent: Uplink/0.1.0 (Platform; ESP32-C3)\r\n",
     )?;
+    push(&mut request, "Connection: close\r\n")?;
     push(&mut request, "Accept: */*\r\n\r\n")?;
     Ok(request)
 }
@@ -44,19 +50,18 @@ where
     push(&mut request, host)?;
     push(&mut request, "\r\nContent-Type: application/json\r\n")?;
 
-    let json_result = serde_json_core::to_string::<T, 256>(data);
+    // One-shot client: tell HTTP/1.1 servers to close instead of keeping
+    // the connection alive while the device blocks on read-to-EOF.
+    push(&mut request, "Connection: close\r\n")?;
 
-    match json_result {
-        Ok(json) => {
-            push(&mut request, "Content-Length: ")?;
-            push_usize(&mut request, json.len())?;
-            push(&mut request, "\r\nConnection: close\r\n\r\n")?;
-            push(&mut request, &json)?;
-        }
-        Err(_) => {
-            push(&mut request, "Content-Length: 0\r\n\r\n")?;
-        }
-    }
+    // A payload that doesn't fit the buffer is an error, not an empty POST —
+    // silently sending Content-Length: 0 would register a bogus uplink.
+    let json = serde_json_core::to_string::<T, 256>(data).map_err(|_| HttpError::Serialization)?;
+
+    push(&mut request, "Content-Length: ")?;
+    push_usize(&mut request, json.len())?;
+    push(&mut request, "\r\n\r\n")?;
+    push(&mut request, &json)?;
 
     Ok(request)
 }
@@ -195,16 +200,78 @@ mod tests {
     fn test_post_request_formatting() {
         let host = "test.host.com";
         let path = Some("/test/path");
-        let message = UplinkMessage {
-            id: "test-id".try_into().unwrap(),
-            current: 99,
-        };
+        let message = UplinkMessage::new("test-id".try_into().unwrap(), 99);
 
         let request_string = post_request(host, &message, path).unwrap();
 
         assert!(request_string.starts_with("POST /test/path HTTP/1.1\r\n"));
         assert!(request_string.contains("Host: test.host.com\r\n"));
         assert!(request_string.contains("Content-Type: application/json\r\n"));
-        assert!(request_string.contains("\r\n\r\n{\"id\":\"test-id\",\"current\":99}"));
+        assert!(request_string.contains(concat!(
+            "\r\n\r\n{\"id\":\"test-id\",\"current\":99,\"fw\":\"",
+            env!("CARGO_PKG_VERSION"),
+            "\"}"
+        )));
+    }
+
+    /// GET and POST speak the same dialect: HTTP/1.1 + Connection: close.
+    #[test]
+    fn test_get_request_dialect_matches_post() {
+        let request = get_request("test.host.com", Some("/hello")).unwrap();
+        assert!(request.starts_with("GET /hello HTTP/1.1\r\n"));
+        assert!(request.contains("Host: test.host.com\r\n"));
+        assert!(request.contains("Connection: close\r\n"));
+        assert!(request.ends_with("\r\n\r\n"));
+    }
+
+    /// Production-sized hostname + path must fit the GET buffer.
+    #[test]
+    fn test_get_request_fits_staging_hostname() {
+        let request = get_request("staging.supervictor.advin.io", Some("/hello")).unwrap();
+        assert!(request.contains("Host: staging.supervictor.advin.io\r\n"));
+    }
+
+    /// Overlong host/path overflows the buffer as an error, not truncation.
+    #[test]
+    fn test_get_request_overflow_is_an_error() {
+        const LONG_HOST: &str = concat!(
+            "very-long-subdomain-name-segment.another-long-segment",
+            ".yet-another-segment.example-domain-name.com"
+        );
+        let result = get_request(LONG_HOST, Some("/a/rather/long/path/for/good/measure"));
+        assert!(matches!(result, Err(HttpError::BufferOverflow)));
+    }
+
+    /// Regression: a payload that exceeds the JSON serialization buffer must
+    /// surface an error, never a silent empty-body POST (Content-Length: 0)
+    /// that the server would accept as a valid-but-meaningless uplink.
+    #[test]
+    fn test_post_request_oversized_payload_is_an_error() {
+        #[derive(serde::Serialize)]
+        struct Oversized {
+            data: &'static str,
+        }
+        // 312 chars > the 256-byte serde-json-core buffer in post_request
+        const LONG: &str = concat!(
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+            "abcdefghijklmnopqrstuvwxyz",
+        );
+        let big = Oversized { data: LONG };
+
+        let result = post_request("host", &big, None);
+        assert!(
+            matches!(result, Err(HttpError::Serialization)),
+            "oversized payload must fail with Serialization error, got {result:?}"
+        );
     }
 }

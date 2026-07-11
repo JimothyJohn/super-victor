@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release binaries
 
 on:
   push:
@@ -9,41 +9,35 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-apple-darwin
-            os: macos-13
-    runs-on: ${{ matrix.os }}
+  # Endpoint server for the t4g.micro staging host (and any arm64 Linux box).
+  build-endpoint:
+    runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
 
-      - name: Build CLI
-        run: cargo build -p supervictor-cli --release --target ${{ matrix.target }}
+      - name: Build endpoint
+        run: cargo build -p supervictor-endpoint --release --features sqlite,dynamo
 
       - name: Package binary
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/qs dist/qs
+          cp target/release/supervictor-endpoint dist/supervictor-endpoint
           cd dist
-          tar czf qs-${{ matrix.target }}.tar.gz qs
-          shasum -a 256 qs-${{ matrix.target }}.tar.gz > qs-${{ matrix.target }}.tar.gz.sha256
+          tar czf supervictor-endpoint-aarch64-unknown-linux-gnu.tar.gz supervictor-endpoint
+          shasum -a 256 supervictor-endpoint-aarch64-unknown-linux-gnu.tar.gz \
+            > supervictor-endpoint-aarch64-unknown-linux-gnu.tar.gz.sha256
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: qs-${{ matrix.target }}
-          path: dist/qs-${{ matrix.target }}.tar.gz*
+          name: supervictor-endpoint-aarch64-unknown-linux-gnu
+          path: dist/supervictor-endpoint-*.tar.gz*
 
   release:
-    needs: build
+    needs: [build-endpoint]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -54,6 +48,6 @@ jobs:
       - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: |
-            qs-*.tar.gz
-            qs-*.sha256
+            supervictor-endpoint-*.tar.gz
+            supervictor-endpoint-*.sha256
           generate_release_notes: true

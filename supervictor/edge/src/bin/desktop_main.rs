@@ -48,10 +48,7 @@ pub async fn socket_app() -> Result<(), Box<dyn std::error::Error>> {
     // SNI server name must match the server's certificate
     let server_name = ServerName::try_from(base_host.as_str())?.to_owned();
 
-    let message = UplinkMessage {
-        id: "1234567890".try_into().unwrap(),
-        current: 100,
-    };
+    let message = UplinkMessage::new("1234567890".try_into().unwrap(), 100);
     let json_body: HString<512> =
         serde_json_core::to_string(&message).unwrap_or_else(|_| "{}".try_into().unwrap());
 
@@ -59,7 +56,14 @@ pub async fn socket_app() -> Result<(), Box<dyn std::error::Error>> {
         match TcpStream::connect(socket_addr).await {
             Ok(socket) => match connector.connect(server_name.clone(), socket).await {
                 Ok(mut tls_stream) => {
-                    let request = post_request(&base_host, &json_body, None);
+                    let request = match post_request(&base_host, &json_body, None) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            println!("Error building request: {}", e);
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    };
 
                     if let Err(e) = tls_stream.write_all(request.as_bytes()).await {
                         println!("Error writing request: {}", e);

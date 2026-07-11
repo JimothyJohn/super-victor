@@ -3,7 +3,7 @@ use aws_sdk_dynamodb::Client;
 
 use crate::error::AppError;
 use crate::models::{DeviceRecord, UplinkRecord};
-use crate::store::DeviceStore;
+use crate::store::{DeviceStore, StoreError};
 
 /// DynamoDB-backed implementation of [`DeviceStore`](super::DeviceStore).
 pub struct DynamoDeviceStore {
@@ -61,7 +61,12 @@ impl DynamoDeviceStore {
             item.get(key)
                 .and_then(|v| v.as_s().ok())
                 .map(|s| s.to_string())
-                .ok_or_else(|| AppError::Store(format!("missing field: {key}")))
+                .ok_or_else(|| {
+                    AppError::Store(StoreError::io(
+                        "item_to_device",
+                        format!("missing field: {key}"),
+                    ))
+                })
         };
 
         Ok(DeviceRecord {
@@ -98,7 +103,7 @@ impl DeviceStore for DynamoDeviceStore {
                         device_id: record.device_id,
                     })
                 } else {
-                    Err(AppError::Store(format!("put_device: {service_err}")))
+                    Err(AppError::Store(StoreError::io("put_device", service_err)))
                 }
             }
         }
@@ -112,7 +117,7 @@ impl DeviceStore for DynamoDeviceStore {
                 .key("device_id", AttributeValue::S(device_id.to_string()))
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("get_device: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("get_device", e)))?;
 
         match result.item {
             Some(ref item) => Ok(Some(Self::item_to_device(item)?)),
@@ -122,14 +127,14 @@ impl DeviceStore for DynamoDeviceStore {
 
     fn list_devices(&self) -> Result<Vec<DeviceRecord>, AppError> {
         let result = block_on(self.client.scan().table_name(&self.devices_table).send())
-            .map_err(|e| AppError::Store(format!("list_devices: {e}")))?;
+            .map_err(|e| AppError::Store(StoreError::io("list_devices", e)))?;
 
         result.items().iter().map(Self::item_to_device).collect()
     }
 
     fn put_uplink(&self, record: UplinkRecord) -> Result<(), AppError> {
         let payload_str = serde_json::to_string(&record.payload)
-            .map_err(|e| AppError::Store(format!("serialize payload: {e}")))?;
+            .map_err(|e| AppError::Store(StoreError::serde("serialize payload", e)))?;
 
         block_on(
             self.client
@@ -140,9 +145,63 @@ impl DeviceStore for DynamoDeviceStore {
                 .item("payload", AttributeValue::S(payload_str))
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("put_uplink: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("put_uplink", e)))?;
 
         Ok(())
+    }
+
+    fn set_device_status(&self, device_id: &str, status: &str) -> Result<DeviceRecord, AppError> {
+        let result = block_on(
+            self.client
+                .update_item()
+                .table_name(&self.devices_table)
+                .key("device_id", AttributeValue::S(device_id.to_string()))
+                .update_expression("SET #s = :status")
+                .expression_attribute_names("#s", "status")
+                .expression_attribute_values(":status", AttributeValue::S(status.to_string()))
+                .condition_expression("attribute_exists(device_id)")
+                .return_values(aws_sdk_dynamodb::types::ReturnValue::AllNew)
+                .send(),
+        );
+
+        match result {
+            Ok(out) => {
+                let item = out.attributes().ok_or_else(|| {
+                    AppError::Store(StoreError::io(
+                        "set_device_status",
+                        "no attributes returned",
+                    ))
+                })?;
+                Self::item_to_device(item)
+            }
+            Err(e) => {
+                let service_err = e.into_service_error();
+                if service_err.is_conditional_check_failed_exception() {
+                    Err(AppError::DeviceNotFound {
+                        device_id: device_id.to_string(),
+                    })
+                } else {
+                    Err(AppError::Store(StoreError::io(
+                        "set_device_status",
+                        service_err,
+                    )))
+                }
+            }
+        }
+    }
+
+    /// One query per device (`limit 1`, newest first). Fine at current fleet
+    /// sizes; at 100+ devices pre-aggregate a latest-uplink item instead
+    /// (TODO.md / FRONTEND plan open question).
+    fn latest_uplinks(&self) -> Result<Vec<UplinkRecord>, AppError> {
+        let devices = self.list_devices()?;
+        let mut out = Vec::with_capacity(devices.len());
+        for device in devices {
+            if let Some(uplink) = self.get_uplinks(&device.device_id, 1)?.into_iter().next() {
+                out.push(uplink);
+            }
+        }
+        Ok(out)
     }
 
     fn get_uplinks(&self, device_id: &str, limit: usize) -> Result<Vec<UplinkRecord>, AppError> {
@@ -156,7 +215,7 @@ impl DeviceStore for DynamoDeviceStore {
                 .limit(limit as i32)
                 .send(),
         )
-        .map_err(|e| AppError::Store(format!("get_uplinks: {e}")))?;
+        .map_err(|e| AppError::Store(StoreError::io("get_uplinks", e)))?;
 
         result
             .items()
@@ -166,12 +225,16 @@ impl DeviceStore for DynamoDeviceStore {
                     .get("device_id")
                     .and_then(|v| v.as_s().ok())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| AppError::Store("missing device_id".into()))?;
+                    .ok_or_else(|| {
+                        AppError::Store(StoreError::io("get_uplinks", "missing device_id"))
+                    })?;
                 let received_at = item
                     .get("received_at")
                     .and_then(|v| v.as_s().ok())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| AppError::Store("missing received_at".into()))?;
+                    .ok_or_else(|| {
+                        AppError::Store(StoreError::io("get_uplinks", "missing received_at"))
+                    })?;
                 let payload_str = item
                     .get("payload")
                     .and_then(|v| v.as_s().ok())
@@ -187,5 +250,125 @@ impl DeviceStore for DynamoDeviceStore {
                 })
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn make_device(id: &str) -> DeviceRecord {
+        DeviceRecord {
+            device_id: id.into(),
+            owner_id: "owner-1".into(),
+            subject_dn: None,
+            status: "active".into(),
+            created_at: "2025-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn device_to_item_roundtrip() {
+        let device = make_device("dev-1");
+        let item = DynamoDeviceStore::device_to_item(&device);
+        let recovered = DynamoDeviceStore::item_to_device(&item).unwrap();
+        assert_eq!(recovered.device_id, "dev-1");
+        assert_eq!(recovered.owner_id, "owner-1");
+        assert_eq!(recovered.status, "active");
+        assert_eq!(recovered.created_at, "2025-01-01T00:00:00Z");
+        assert!(recovered.subject_dn.is_none());
+    }
+
+    #[test]
+    fn device_to_item_with_subject_dn() {
+        let mut device = make_device("dev-2");
+        device.subject_dn = Some("CN=device2,O=supervictor".into());
+        let item = DynamoDeviceStore::device_to_item(&device);
+        let recovered = DynamoDeviceStore::item_to_device(&item).unwrap();
+        assert_eq!(
+            recovered.subject_dn.as_deref(),
+            Some("CN=device2,O=supervictor")
+        );
+    }
+
+    #[test]
+    fn device_to_item_has_all_fields() {
+        let device = make_device("dev-1");
+        let item = DynamoDeviceStore::device_to_item(&device);
+        assert_eq!(item.len(), 4);
+        assert!(item.contains_key("device_id"));
+        assert!(item.contains_key("owner_id"));
+        assert!(item.contains_key("status"));
+        assert!(item.contains_key("created_at"));
+    }
+
+    #[test]
+    fn device_to_item_includes_subject_dn_when_present() {
+        let mut device = make_device("dev-1");
+        device.subject_dn = Some("CN=test".into());
+        let item = DynamoDeviceStore::device_to_item(&device);
+        assert_eq!(item.len(), 5);
+        assert!(item.contains_key("subject_dn"));
+    }
+
+    #[test]
+    fn item_to_device_missing_device_id() {
+        let mut item = HashMap::new();
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_missing_owner_id() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::S("dev-1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_missing_status() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::S("dev-1".into()));
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_wrong_attribute_type() {
+        let mut item = HashMap::new();
+        item.insert("device_id".into(), AttributeValue::N("123".into()));
+        item.insert("owner_id".into(), AttributeValue::S("o1".into()));
+        item.insert("status".into(), AttributeValue::S("active".into()));
+        item.insert(
+            "created_at".into(),
+            AttributeValue::S("2025-01-01T00:00:00Z".into()),
+        );
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
+    }
+
+    #[test]
+    fn item_to_device_empty_map() {
+        let item = HashMap::new();
+        let err = DynamoDeviceStore::item_to_device(&item).unwrap_err();
+        assert!(format!("{err}").contains("missing field"));
     }
 }

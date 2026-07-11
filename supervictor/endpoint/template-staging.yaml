@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Supervictor endpoint - staging (single-node EC2 + Caddy + SQLite)
+
+Parameters:
+    Hostname:
+        Type: String
+        Default: staging.supervictor.advin.io
+        Description: FQDN for the staging endpoint
+
+    InstanceType:
+        Type: String
+        Default: t4g.micro
+        AllowedValues:
+            - t4g.micro
+            - t4g.small
+            - t4g.medium
+
+    HostedZoneId:
+        Type: AWS::Route53::HostedZone::Id
+        Description: Route53 hosted zone for advin.io
+
+    BundleBucket:
+        Type: String
+        Default: supervictor
+        Description: S3 bucket holding the deploy bundle and certs
+
+    BundleKey:
+        Type: String
+        Default: staging/bundle.tar.gz
+
+    CaCertKey:
+        Type: String
+        Default: staging/ca.pem
+
+    ServerCertKey:
+        Type: String
+        Default: staging/server.pem
+
+    ServerKeyKey:
+        Type: String
+        Default: staging/server.key
+
+    VpcId:
+        Type: AWS::EC2::VPC::Id
+        Description: Default VPC
+
+    SubnetId:
+        Type: AWS::EC2::Subnet::Id
+        Description: Public subnet in the default VPC
+
+    AmiId:
+        Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+        Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+
+Resources:
+    SecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: supervictor staging - 443 mTLS ingress
+            VpcId: !Ref VpcId
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 443
+                  ToPort: 443
+                  CidrIp: 0.0.0.0/0
+                  Description: mTLS API (devices)
+            Tags:
+                - Key: Name
+                  Value: supervictor-staging
+
+    InstanceRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: ec2.amazonaws.com
+                      Action: sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+            Policies:
+                - PolicyName: BundleAndCertRead
+                  PolicyDocument:
+                      Version: "2012-10-17"
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - s3:GetObject
+                            Resource:
+                                - !Sub arn:aws:s3:::${BundleBucket}/${BundleKey}
+                                - !Sub arn:aws:s3:::${BundleBucket}/${CaCertKey}
+                                - !Sub arn:aws:s3:::${BundleBucket}/${ServerCertKey}
+                                - !Sub arn:aws:s3:::${BundleBucket}/${ServerKeyKey}
+
+    InstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            Roles:
+                - !Ref InstanceRole
+
+    ElasticIp:
+        Type: AWS::EC2::EIP
+        Properties:
+            Domain: vpc
+            Tags:
+                - Key: Name
+                  Value: supervictor-staging
+
+    Instance:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: !Ref AmiId
+            InstanceType: !Ref InstanceType
+            IamInstanceProfile: !Ref InstanceProfile
+            SubnetId: !Ref SubnetId
+            SecurityGroupIds:
+                - !Ref SecurityGroup
+            BlockDeviceMappings:
+                - DeviceName: /dev/xvda
+                  Ebs:
+                      VolumeSize: 20
+                      VolumeType: gp3
+                      Encrypted: true
+                      DeleteOnTermination: true
+            MetadataOptions:
+                HttpTokens: required
+                HttpEndpoint: enabled
+            Tags:
+                - Key: Name
+                  Value: supervictor-staging
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/usr/bin/env bash
+                    set -e
+                    set -o pipefail
+                    exec > >(tee /var/log/bootstrap.log) 2>&1
+
+                    echo "[bootstrap] installing packages"
+                    dnf update -y
+                    dnf install -y docker tar gzip
+
+                    echo "[bootstrap] enabling swap (Rust build headroom on t4g.micro)"
+                    if [ ! -f /swapfile ]; then
+                        dd if=/dev/zero of=/swapfile bs=1M count=2048
+                        chmod 600 /swapfile
+                        mkswap /swapfile
+                        swapon /swapfile
+                        echo "/swapfile none swap sw 0 0" >> /etc/fstab
+                    fi
+
+                    echo "[bootstrap] starting docker"
+                    systemctl enable docker
+                    systemctl start docker
+
+                    echo "[bootstrap] installing docker compose plugin"
+                    mkdir -p /usr/libexec/docker/cli-plugins
+                    curl -sSL \
+                        https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-aarch64 \
+                        -o /usr/libexec/docker/cli-plugins/docker-compose
+                    chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+                    echo "[bootstrap] fetching certs + bundle from s3"
+                    mkdir -p /opt/supervictor/certs /opt/supervictor/app /var/lib/supervictor
+                    aws s3 cp s3://${BundleBucket}/${CaCertKey}     /opt/supervictor/certs/ca.pem
+                    aws s3 cp s3://${BundleBucket}/${ServerCertKey} /opt/supervictor/certs/server.pem
+                    aws s3 cp s3://${BundleBucket}/${ServerKeyKey}  /opt/supervictor/certs/server.key
+                    chmod 600 /opt/supervictor/certs/server.key
+                    aws s3 cp s3://${BundleBucket}/${BundleKey}     /tmp/bundle.tar.gz
+                    tar -xzf /tmp/bundle.tar.gz -C /opt/supervictor/app
+
+                    echo "[bootstrap] starting compose stack"
+                    cd /opt/supervictor/app/supervictor/endpoint
+                    docker compose -f docker-compose.staging.yml up -d --build
+
+                    echo "[bootstrap] installing systemd unit for reboot persistence"
+                    cat > /etc/systemd/system/supervictor.service <<'UNIT'
+                    [Unit]
+                    Description=Supervictor staging compose stack
+                    Requires=docker.service
+                    After=docker.service network-online.target
+
+                    [Service]
+                    Type=oneshot
+                    RemainAfterExit=yes
+                    WorkingDirectory=/opt/supervictor/app/supervictor/endpoint
+                    ExecStart=/usr/bin/docker compose -f docker-compose.staging.yml up -d
+                    ExecStop=/usr/bin/docker compose -f docker-compose.staging.yml down
+
+                    [Install]
+                    WantedBy=multi-user.target
+                    UNIT
+                    systemctl daemon-reload
+                    systemctl enable supervictor.service
+
+                    echo "[bootstrap] done"
+
+    ElasticIpAssociation:
+        Type: AWS::EC2::EIPAssociation
+        Properties:
+            AllocationId: !GetAtt ElasticIp.AllocationId
+            InstanceId: !Ref Instance
+
+    DnsRecord:
+        Type: AWS::Route53::RecordSet
+        Properties:
+            HostedZoneId: !Ref HostedZoneId
+            Name: !Ref Hostname
+            Type: A
+            TTL: 60
+            ResourceRecords:
+                - !Ref ElasticIp
+
+Outputs:
+    PublicIp:
+        Value: !Ref ElasticIp
+    Hostname:
+        Value: !Ref Hostname
+    InstanceId:
+        Value: !Ref Instance
+    ShellCommand:
+        Value: !Sub aws ssm start-session --target ${Instance} --region ${AWS::Region}
+    HealthCheck:
+        Value: !Sub https://${Hostname}/health

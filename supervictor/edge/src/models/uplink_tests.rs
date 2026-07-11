@@ -2,10 +2,7 @@ use crate::models::uplink::{LambdaResponse, UplinkMessage};
 use heapless::String as HString;
 
 fn make_uplink(id: &str, current: i32) -> UplinkMessage {
-    UplinkMessage {
-        id: id.try_into().unwrap(),
-        current,
-    }
+    UplinkMessage::new(id.try_into().unwrap(), current)
 }
 
 fn make_lambda_response() -> LambdaResponse {
@@ -26,15 +23,19 @@ fn make_lambda_response() -> LambdaResponse {
 fn uplink_serialize_basic() {
     let msg = make_uplink("dev-1", 42);
     let json: HString<256> = serde_json_core::to_string(&msg).unwrap();
-    assert_eq!(json.as_str(), r#"{"id":"dev-1","current":42}"#);
+    assert_eq!(
+        json.as_str(),
+        concat!(
+            r#"{"id":"dev-1","current":42,"fw":""#,
+            env!("CARGO_PKG_VERSION"),
+            r#""}"#
+        )
+    );
 }
 
 #[test]
 fn uplink_serialize_empty_id() {
-    let msg = UplinkMessage {
-        id: HString::new(),
-        current: 0,
-    };
+    let msg = UplinkMessage::new(HString::new(), 0);
     let json: HString<256> = serde_json_core::to_string(&msg).unwrap();
     assert!(json.contains(r#""id":"""#));
     assert!(json.contains(r#""current":0"#));
@@ -76,6 +77,15 @@ fn uplink_deserialize_basic() {
     let (msg, _): (UplinkMessage, _) = serde_json_core::from_str(json).unwrap();
     assert_eq!(msg.id.as_str(), "dev-1");
     assert_eq!(msg.current, 42);
+    // pre-fw JSON parses with an empty firmware version (backward compat)
+    assert!(msg.fw.is_empty());
+}
+
+#[test]
+fn uplink_deserialize_with_fw() {
+    let json = r#"{"id":"dev-1","current":42,"fw":"0.1.0"}"#;
+    let (msg, _): (UplinkMessage, _) = serde_json_core::from_str(json).unwrap();
+    assert_eq!(msg.fw.as_str(), "0.1.0");
 }
 
 #[test]
@@ -127,6 +137,7 @@ fn uplink_roundtrip_preserves_data() {
     let (recovered, _): (UplinkMessage, _) = serde_json_core::from_str(json.as_str()).unwrap();
     assert_eq!(recovered.id.as_str(), original.id.as_str());
     assert_eq!(recovered.current, original.current);
+    assert_eq!(recovered.fw.as_str(), original.fw.as_str());
 }
 
 #[test]

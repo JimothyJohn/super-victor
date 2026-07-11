@@ -1,7 +1,5 @@
 //! Binary entrypoint for the supervictor endpoint server.
 
-//! Binary entrypoint for the supervictor endpoint server.
-
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -22,12 +20,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let store = supervictor_endpoint::store::factory::create_store(&config).await?;
+    supervictor_endpoint::watchdog::spawn(store.clone(), config.watchdog_interval_secs);
     let app = supervictor_endpoint::routes::router(store);
 
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(addr = %addr, "listening");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+    tracing::info!("shutdown complete");
 
     Ok(())
+}
+
+/// Resolve when SIGTERM (ECS task stop, Lambda Web Adapter drain) or Ctrl-C
+/// arrives, letting in-flight requests finish instead of dropping mid-write.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("received Ctrl-C, draining"),
+        _ = terminate => tracing::info!("received SIGTERM, draining"),
+    }
 }
