@@ -3,682 +3,548 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Supervictor</title>
+<title>Supervictor — Fleet operations for connected hardware</title>
+<meta name="description" content="Deploy, monitor, and sustain device fleets with per-device mTLS identity, a live fleet dashboard, and one-command provisioning. All Rust, register to database.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0e0e10;
+    --bg2: #131316;
     --surface: #18181b;
-    --border: #27272a;
+    --line: #27272a;
+    --line-hi: #3f3f46;
     --text: #e4e4e7;
-    --muted: #a1a1aa;
+    --muted: #8b8b93;
+    --faint: #55555c;
     --accent: #f97316;
     --accent-dim: #c2410c;
-    --code-bg: #1e1e22;
     --green: #22c55e;
-    --blue: #3b82f6;
-    --purple: #a78bfa;
+    --amber: #fbbf24;
+    --red: #ef4444;
+    --display: "Chakra Petch", sans-serif;
+    --mono: "IBM Plex Mono", monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     background: var(--bg);
     color: var(--text);
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
+    font-family: var(--display);
+    line-height: 1.55;
+    overflow-x: hidden;
   }
+  /* blueprint grid + glow atmosphere */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: 0.14;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    top: -30vh; right: -20vw;
+    width: 80vw; height: 80vh;
+    background: radial-gradient(closest-side, rgba(249,115,22,0.09), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  main, header.top, footer { position: relative; z-index: 1; }
 
-  /* Banner */
-  .banner {
-    width: 100%;
-    height: 260px;
-    object-fit: cover;
-    display: block;
-    border-bottom: 1px solid var(--border);
-  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+  ::selection { background: var(--accent); color: #0e0e10; }
 
-  .container {
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 0 24px;
+  /* ── top status bar ─────────────────────────────────────── */
+  header.top {
+    border-bottom: 1px solid var(--line);
+    background: rgba(14,14,16,0.85);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0;
+    z-index: 10;
   }
-
-  /* Header */
-  header {
-    padding: 48px 0 32px;
-    border-bottom: 1px solid var(--border);
-  }
-  header h1 {
-    font-size: 2.25rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  header h1 span { color: var(--accent); }
-  header p {
-    margin-top: 8px;
-    color: var(--muted);
-    font-size: 1.1rem;
-    max-width: 600px;
-  }
-
-  /* Badges */
-  .badges {
-    display: flex;
-    gap: 8px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-  }
-  .badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .badge.rust   { background: #7c2d12; color: #fdba74; }
-  .badge.aws    { background: #14532d; color: #86efac; }
-  .badge.mtls   { background: #3b0764; color: #d8b4fe; }
-  .badge.esp    { background: #1e3a5f; color: #93c5fd; }
-
-  /* Hero links */
-  .cta {
-    display: flex;
-    gap: 12px;
-    margin-top: 20px;
-    flex-wrap: wrap;
-  }
-  .cta a {
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 600;
-    background: var(--accent);
-    color: #0e0e10;
-  }
-  .cta a.secondary {
-    background: transparent;
-    color: var(--accent);
-    border: 1px solid var(--accent-dim);
-  }
-  .cta a:hover { filter: brightness(1.1); }
-
-  /* Sections */
-  section {
-    padding: 40px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  section:last-child { border-bottom: none; }
-  section h2 {
-    font-size: 1.3rem;
-    font-weight: 600;
-    margin-bottom: 20px;
-    color: var(--text);
-  }
-
-  /* Architecture diagram */
-  .arch {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr auto 1fr;
-    align-items: center;
-    gap: 0;
-    padding: 28px 20px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    text-align: center;
-    overflow-x: auto;
-  }
-  .arch-node {
-    padding: 16px 12px;
-  }
-  .arch-node .label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
+  .top-inner {
+    display: flex; align-items: center; gap: 20px;
+    height: 56px;
+    font-family: var(--mono); font-size: 12px;
     letter-spacing: 0.08em;
-    color: var(--muted);
-    margin-bottom: 6px;
   }
-  .arch-node .name {
-    font-size: 1rem;
-    font-weight: 600;
+  .brand { font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .brand em { color: var(--accent); font-style: normal; }
+  .sysdot { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); text-transform: uppercase; }
+  .sysdot::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: breathe 2.6s ease-in-out infinite;
   }
-  .arch-node .detail {
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 2px;
+  @keyframes breathe { 50% { opacity: 0.35; } }
+  .top-nav { margin-left: auto; display: flex; gap: 22px; text-transform: uppercase; }
+  .top-nav a { color: var(--muted); text-decoration: none; transition: color .15s; }
+  .top-nav a:hover { color: var(--accent); }
+  .top-nav a.solid {
+    color: #0e0e10; background: var(--accent);
+    padding: 6px 14px; font-weight: 600;
   }
-  .arch-arrow {
-    font-size: 1.5rem;
-    color: var(--accent);
-    padding: 0 4px;
+  .top-nav a.solid:hover { background: #fb923c; }
+
+  /* ── hero ───────────────────────────────────────────────── */
+  .hero { padding: 84px 0 72px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+
+  .sheetno {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    color: var(--accent); text-transform: uppercase;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .sheetno::after { content: ""; height: 1px; width: 64px; background: var(--accent-dim); }
+
+  h1 {
+    font-size: clamp(2.6rem, 6vw, 4.3rem);
+    font-weight: 700; line-height: 1.02;
+    text-transform: uppercase; letter-spacing: 0.01em;
+    margin: 18px 0 22px;
+  }
+  h1 .stroke {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--accent);
+  }
+  .hero p.sub { color: var(--muted); font-size: 1.06rem; max-width: 46ch; }
+  .hero-ctas { display: flex; gap: 14px; margin-top: 34px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em;
+    text-transform: uppercase; text-decoration: none;
+    padding: 13px 22px; border: 1px solid var(--accent);
+    color: var(--accent); position: relative; overflow: hidden;
+    transition: color .2s;
+  }
+  .btn::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--accent); transform: scaleX(0);
+    transform-origin: left; transition: transform .22s ease;
+    z-index: -1;
+  }
+  .btn:hover { color: #0e0e10; }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn.primary { background: var(--accent); color: #0e0e10; font-weight: 600; }
+  .btn.primary:hover { background: #fb923c; border-color: #fb923c; }
+
+  /* hero schematic */
+  .schematic {
+    border: 1px solid var(--line);
+    background: linear-gradient(160deg, var(--bg2), var(--bg));
+    padding: 26px 22px 18px;
+    position: relative;
+  }
+  .schematic .corner { position: absolute; width: 10px; height: 10px; border: 1px solid var(--accent); }
+  .corner.tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+  .corner.tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; }
+  .corner.bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; }
+  .corner.br { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+  .schematic h3 {
+    font-family: var(--mono); font-size: 10px; color: var(--faint);
+    letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 18px;
+  }
+  .wirepath { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .node { text-align: center; font-family: var(--mono); }
+  .node .box {
+    width: 58px; height: 58px; border: 1px solid var(--line-hi);
+    display: grid; place-items: center; margin: 0 auto 8px;
+    font-size: 22px; background: var(--bg);
+    transition: border-color .2s;
+  }
+  .node:hover .box { border-color: var(--accent); }
+  .node .lbl { font-size: 9px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+  .wire { flex: 1; height: 1px; background: var(--line-hi); position: relative; margin: 0 8px 26px; }
+  .wire .pulse {
+    position: absolute; top: -2px; left: 0;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent);
+    animation: travel 2.8s linear infinite;
+  }
+  .wire.w2 .pulse { animation-delay: 0.9s; }
+  .wire.w3 .pulse { animation-delay: 1.8s; }
+  @keyframes travel { 0% { left: 0; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: calc(100% - 5px); opacity: 0; } }
+  .wire .tag {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+    color: var(--accent); text-transform: uppercase; white-space: nowrap;
   }
 
-  /* File tree */
-  .tree {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px 24px;
-    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
-    font-size: 0.85rem;
-    line-height: 1.8;
-    overflow-x: auto;
-    color: var(--muted);
+  table.minifleet { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+  .minifleet th {
+    text-align: left; color: var(--faint); font-weight: 400;
+    font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    padding: 6px 8px; border-bottom: 1px solid var(--line);
   }
-  .tree .dir { color: var(--blue); }
-  .tree .file { color: var(--text); }
-  .tree .comment { color: #52525b; }
+  .minifleet td { padding: 7px 8px; border-bottom: 1px solid var(--line); color: var(--muted); }
+  .minifleet td:first-child { color: var(--text); }
+  .pill { padding: 1px 8px; border: 1px solid; border-radius: 999px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .pill.fresh { color: var(--green); border-color: var(--green); }
+  .pill.stale { color: var(--amber); border-color: var(--amber); }
+  .pill.dark  { color: var(--red); border-color: var(--red); }
 
-  /* Code blocks */
-  pre {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px 20px;
-    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
-    font-size: 0.85rem;
-    line-height: 1.7;
-    overflow-x: auto;
-    color: var(--text);
+  /* ── section chrome ─────────────────────────────────────── */
+  section { padding: 76px 0; border-top: 1px solid var(--line); }
+  .sechead { display: flex; align-items: baseline; gap: 18px; margin-bottom: 44px; flex-wrap: wrap; }
+  .sechead h2 {
+    font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.02em;
   }
-  code {
-    font-family: inherit;
-    background: var(--code-bg);
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.85em;
-  }
+  .sechead .dim { flex: 1; height: 1px; background: var(--line); position: relative; top: -6px; min-width: 60px; }
+  .dim::before, .dim::after { content: ""; position: absolute; top: -3px; width: 1px; height: 7px; background: var(--line-hi); }
+  .dim::before { left: 0; } .dim::after { right: 0; }
 
-  /* Pipeline table */
-  .pipeline {
-    width: 100%;
-    border-collapse: collapse;
+  /* ── problem cards ──────────────────────────────────────── */
+  .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 800px) { .cards3 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--bg2); padding: 30px 26px;
+    position: relative; transition: background .2s;
   }
-  .pipeline th,
-  .pipeline td {
-    text-align: left;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.9rem;
+  .card:hover { background: var(--surface); }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 100%;
+    height: 2px; background: var(--accent); transition: right .3s ease;
   }
-  .pipeline th {
-    color: var(--muted);
-    font-weight: 500;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .pipeline td:first-child {
-    font-weight: 600;
-    font-family: "SF Mono", "Fira Code", Consolas, monospace;
-    color: var(--accent);
-    white-space: nowrap;
-  }
-  .pipeline tr:last-child td { border-bottom: none; }
-
-  /* Test tiers */
-  .tiers {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-  }
-  .tier {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-  }
-  .tier h3 {
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .tier h3 .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-  .tier p {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin-bottom: 4px;
+  .card:hover::before { right: 0; }
+  .card .idx { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; }
+  .card h3 { font-size: 1.12rem; font-weight: 600; margin: 12px 0 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .card p { color: var(--muted); font-size: 0.94rem; }
+  .card p code, .spec td code, .arch-note code {
+    font-family: var(--mono); font-size: 0.86em;
+    background: var(--bg); border: 1px solid var(--line);
+    padding: 1px 6px; color: var(--text);
   }
 
-  /* Env table */
-  .env-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
+  /* ── pillars ────────────────────────────────────────────── */
+  .pillar { display: grid; grid-template-columns: 210px 1fr; gap: 34px; padding: 34px 0; border-bottom: 1px dashed var(--line); }
+  .pillar:last-child { border-bottom: 0; }
+  @media (max-width: 700px) { .pillar { grid-template-columns: 1fr; gap: 10px; } }
+  .pillar .k {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--accent); font-size: 14px; font-weight: 600;
   }
-  .env-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
+  .pillar .k span { display: block; color: var(--faint); font-size: 10px; margin-top: 6px; letter-spacing: 0.2em; }
+  .pillar ul { list-style: none; }
+  .pillar li { padding: 7px 0 7px 26px; position: relative; color: var(--muted); font-size: 0.97rem; }
+  .pillar li::before {
+    content: "▸"; position: absolute; left: 4px; color: var(--accent-dim);
   }
-  .env-card h3 {
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-  .env-card p {
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
+  .pillar li strong { color: var(--text); font-weight: 500; }
 
-  /* API endpoint list */
-  .endpoints {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+  /* ── spec table ─────────────────────────────────────────── */
+  table.spec { width: 100%; border-collapse: collapse; border: 1px solid var(--line); font-size: 0.95rem; }
+  .spec th, .spec td { padding: 14px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .spec th {
+    font-family: var(--mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.16em; color: var(--faint); font-weight: 400;
+    background: var(--bg2); width: 230px;
   }
-  .endpoint {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.9rem;
-  }
-  .endpoint:last-child { border-bottom: none; }
-  .method {
-    font-family: "SF Mono", "Fira Code", Consolas, monospace;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 3px;
-    min-width: 48px;
-    text-align: center;
-  }
-  .method.get  { background: #14532d; color: #86efac; }
-  .method.post { background: #1e3a5f; color: #93c5fd; }
-  .endpoint .path {
-    font-family: "SF Mono", "Fira Code", Consolas, monospace;
-    font-weight: 500;
-  }
-  .endpoint .desc {
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin-left: auto;
-  }
+  .spec td { color: var(--muted); }
+  .spec tr:hover td { color: var(--text); }
 
-  /* Quick start steps */
-  .steps {
-    counter-reset: step;
+  /* ── architecture ───────────────────────────────────────── */
+  pre.arch {
+    font-family: var(--mono); font-size: clamp(10px, 1.5vw, 13px);
+    line-height: 1.7; color: var(--muted);
+    background: var(--bg2); border: 1px solid var(--line);
+    padding: 28px 30px; overflow-x: auto;
   }
-  .step {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-  .step::before {
-    counter-increment: step;
-    content: counter(step);
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--accent);
-    margin-top: 2px;
-  }
-  .step-content { flex: 1; }
-  .step-content p {
-    color: var(--muted);
-    font-size: 0.9rem;
-    margin-bottom: 8px;
-  }
-  .step-content pre {
-    margin-top: 4px;
-  }
+  pre.arch b { color: var(--accent); font-weight: 500; }
+  .arch-note { color: var(--muted); margin-top: 18px; font-size: 0.97rem; max-width: 70ch; }
 
-  /* Footer */
-  footer {
-    padding: 32px 0;
-    text-align: center;
-    color: #52525b;
-    font-size: 0.8rem;
-  }
+  /* ── stats strip ────────────────────────────────────────── */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--line); gap: 1px; }
+  @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--bg2); padding: 26px 20px; text-align: center; }
+  .stat .n { font-family: var(--mono); font-size: 2rem; color: var(--accent); font-weight: 600; }
+  .stat .d { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; margin-top: 6px; }
 
+  /* ── CTA band ───────────────────────────────────────────── */
+  .ctaband {
+    border: 1px solid var(--accent-dim); background:
+      linear-gradient(120deg, rgba(249,115,22,0.10), transparent 55%), var(--bg2);
+    padding: 54px 40px; text-align: center; position: relative;
+  }
+  .ctaband h2 { font-size: clamp(1.6rem, 3.4vw, 2.4rem); text-transform: uppercase; margin-bottom: 12px; }
+  .ctaband p { color: var(--muted); margin-bottom: 30px; }
+
+  footer { border-top: 1px solid var(--line); padding: 30px 0 40px; }
+  .foot { display: flex; gap: 26px; align-items: center; font-family: var(--mono); font-size: 11.5px; color: var(--faint); flex-wrap: wrap; }
+  .foot a { color: var(--muted); text-decoration: none; }
+  .foot a:hover { color: var(--accent); }
+  .foot .sp { margin-left: auto; }
+
+  /* mobile compaction */
   @media (max-width: 640px) {
-    header h1 { font-size: 1.75rem; }
-    .arch { grid-template-columns: 1fr; gap: 0; }
-    .arch-arrow { transform: rotate(90deg); padding: 8px 0; }
-    .endpoint { flex-wrap: wrap; }
-    .endpoint .desc { margin-left: 60px; }
+    .top-inner { gap: 12px; height: auto; padding: 10px 0; flex-wrap: wrap; }
+    .sysdot { display: none; }
+    .top-nav { gap: 14px; font-size: 11px; margin-left: 0; width: 100%; }
+    .top-nav a.solid { margin-left: auto; }
+    .hero { padding: 56px 0 48px; }
+    .schematic { padding: 20px 14px 12px; }
+    .node .box { width: 44px; height: 44px; font-size: 16px; }
+    .wire { margin: 0 4px 24px; }
+    .wire .tag { font-size: 8px; }
+    .minifleet-wrap { overflow-x: auto; }
+    .ctaband { padding: 40px 20px; }
+  }
+
+  /* reveal on scroll — hidden state only applies once JS has claimed the
+     page (html.js), so no-JS visitors and crawlers see everything */
+  html.js .rv { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  html.js .rv.in { opacity: 1; transform: none; }
+  .hero .rv { transition-delay: calc(var(--i, 0) * 90ms); }
+  @media (prefers-reduced-motion: reduce) {
+    .rv { opacity: 1; transform: none; transition: none; }
+    .pulse, .sysdot::before { animation: none !important; }
   }
 </style>
 </head>
 <body>
 
-<img src="banner.jpg" alt="Supervictor" class="banner">
-
-<div class="container">
-
-<header>
-  <h1>super<span>victor</span></h1>
-  <p>An all-Rust IoT template: ESP32 edge device, axum cloud API, and mutual TLS authentication&mdash;wired together with a single CLI.</p>
-  <div class="badges">
-    <span class="badge rust">Rust</span>
-    <span class="badge esp">ESP32-C3</span>
-    <span class="badge aws">AWS SAM</span>
-    <span class="badge mtls">mTLS</span>
-  </div>
-  <div class="cta">
-    <a href="demo/">&#9654; Fleet dashboard demo</a>
-    <a href="api/" class="secondary">API docs</a>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">super<em>victor</em></div>
+    <div class="sysdot">fleet nominal</div>
+    <nav class="top-nav">
+      <a href="demo/">Demo</a>
+      <a href="developers.html">Engineers</a>
+      <a href="api/">API</a>
+      <a class="solid" href="mailto:nick@advin.io?subject=Supervictor">Contact</a>
+    </nav>
   </div>
 </header>
 
-<!-- Architecture -->
-<section>
-  <h2>Architecture</h2>
-  <div class="arch">
-    <div class="arch-node">
-      <div class="label">Edge</div>
-      <div class="name">ESP32-C3</div>
-      <div class="detail">Rust / no_std / Embassy</div>
-    </div>
-    <div class="arch-arrow">&rarr;</div>
-    <div class="arch-node">
-      <div class="label">Transport</div>
-      <div class="name">mTLS</div>
-      <div class="detail">X.509 client certs</div>
-    </div>
-    <div class="arch-arrow">&rarr;</div>
-    <div class="arch-node">
-      <div class="label">Cloud</div>
-      <div class="name">Axum API</div>
-      <div class="detail">Rust / tokio / SQLite or DynamoDB</div>
-    </div>
-  </div>
-</section>
+<main>
+  <div class="wrap">
 
-<!-- Repository layout -->
-<section>
-  <h2>Repository Layout</h2>
-  <div class="tree">
-<span class="dir">supervictor/</span>
-<span class="dir">  device/</span>                       <span class="comment"># ESP32-C3 firmware (no_std, Embassy)</span>
-<span class="file">    src/bin/embedded_main.rs</span>   <span class="comment"># firmware entry point</span>
-<span class="file">    src/bin/desktop_main.rs</span>    <span class="comment"># desktop mTLS test client</span>
-<span class="dir">    src/app/</span>                   <span class="comment"># application logic</span>
-<span class="dir">    src/network/</span>               <span class="comment"># HTTP, TLS, DNS, TCP</span>
-<span class="dir">    src/models/</span>                <span class="comment"># uplink message types</span>
-<span class="dir">  endpoint/</span>                     <span class="comment"># cloud API (axum + tokio)</span>
-<span class="file">    src/handlers.rs</span>            <span class="comment"># request handlers</span>
-<span class="file">    src/routes.rs</span>              <span class="comment"># axum router</span>
-<span class="dir">    src/store/</span>                 <span class="comment"># SQLite + DynamoDB backends</span>
-<span class="file">    template.yaml</span>              <span class="comment"># SAM/CloudFormation</span>
-<span class="file">    docker-compose.yml</span>         <span class="comment"># local dev with Caddy mTLS</span>
-<span class="file">  Quickstart</span>                    <span class="comment"># single entry point: build, test, deploy, fleet ops</span>
-<span class="dir">  certs/</span>                        <span class="comment"># generated certs (gitignored)</span>
-<span class="dir">  docs/</span>                         <span class="comment"># this page</span>
-  </div>
-</section>
+    <!-- HERO -->
+    <div class="hero">
+      <div>
+        <div class="sheetno rv" style="--i:0">SHT SV-00 · FLEET OPERATIONS PLATFORM</div>
+        <h1 class="rv" style="--i:1">Your hardware fleet,<br><span class="stroke">under command.</span></h1>
+        <p class="sub rv" style="--i:2">
+          Supervictor deploys, monitors, and sustains connected devices —
+          with a cryptographic identity for every unit, a live dashboard for
+          every site, and one command from bare board to reporting device.
+        </p>
+        <div class="hero-ctas rv" style="--i:3">
+          <a class="btn primary" href="demo/">&#9654;&nbsp;See the live dashboard</a>
+          <a class="btn" href="mailto:nick@advin.io?subject=Supervictor%20pilot">Start a pilot</a>
+        </div>
+      </div>
 
-<!-- API -->
-<section>
-  <h2>API</h2>
-  <div class="endpoints">
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/health</span>
-      <span class="desc">Health check &mdash; returns <code>{ "status": "ok" }</code></span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/</span>
-      <span class="desc">Greeting + mTLS subject (if present)</span>
-    </div>
-    <div class="endpoint">
-      <span class="method post">POST</span>
-      <span class="path">/</span>
-      <span class="desc">Device uplink &mdash; accepts <code>{ id, current }</code> payload</span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/devices</span>
-      <span class="desc">List all registered devices</span>
-    </div>
-    <div class="endpoint">
-      <span class="method post">POST</span>
-      <span class="path">/devices</span>
-      <span class="desc">Register a new device</span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/devices/{device_id}</span>
-      <span class="desc">Get device details</span>
-    </div>
-    <div class="endpoint">
-      <span class="method get">GET</span>
-      <span class="path">/devices/{device_id}/uplinks</span>
-      <span class="desc">Recent uplink history for a device</span>
-    </div>
-  </div>
-</section>
-
-<!-- CLI Pipeline -->
-<section>
-  <h2>Pipeline</h2>
-  <p style="color:var(--muted); margin-bottom:20px; font-size:0.9rem;">
-    <code>./Quickstart</code> orchestrates build, test, deploy, and device management through progressive stages.
-  </p>
-  <div style="overflow-x:auto">
-    <table class="pipeline">
-      <thead>
-        <tr><th>Command</th><th>What it does</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>./Quickstart dev</td>
-          <td>Unit tests, build endpoint, start local server, run integration tests</td>
-        </tr>
-        <tr>
-          <td>./Quickstart dev --serve</td>
-          <td>Same as above but keeps the server running for manual testing</td>
-        </tr>
-        <tr>
-          <td>./Quickstart edge</td>
-          <td>Build + flash ESP32-C3 firmware via espflash 3.3.0</td>
-        </tr>
-        <tr>
-          <td>./Quickstart staging</td>
-          <td>Dev gate &rarr; deploy to dev stack &rarr; integration tests against live endpoint</td>
-        </tr>
-        <tr>
-          <td>./Quickstart prod</td>
-          <td>Dev gate &rarr; staging gate &rarr; confirm &rarr; deploy prod &rarr; mTLS verification</td>
-        </tr>
-        <tr>
-          <td>./Quickstart certs ca</td>
-          <td>Initialize the root CA for mTLS</td>
-        </tr>
-        <tr>
-          <td>./Quickstart certs device &lt;name&gt;</td>
-          <td>Issue a device client certificate</td>
-        </tr>
-        <tr>
-          <td>./Quickstart certs server &lt;name&gt;</td>
-          <td>Issue a server/TLS certificate</td>
-        </tr>
-        <tr>
-          <td>./Quickstart certs verify</td>
-          <td>Verify the mTLS certificate chain</td>
-        </tr>
-        <tr>
-          <td>./Quickstart certs handshake</td>
-          <td>Simulate mTLS handshake against a running server</td>
-        </tr>
-        <tr>
-          <td>./Quickstart ping</td>
-          <td>mTLS GET to verify the server is reachable</td>
-        </tr>
-        <tr>
-          <td>./Quickstart onboard</td>
-          <td>End-to-end device onboarding (certs + flash + verify)</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <p style="color:var(--muted); margin-top:16px; font-size:0.85rem;">
-    All commands accept <code>-v</code> (verbose) and <code>--dry-run</code> flags.
-  </p>
-</section>
-
-<!-- Testing -->
-<section>
-  <h2>Testing Tiers</h2>
-  <div class="tiers">
-    <div class="tier">
-      <h3><span class="dot" style="background:var(--green)"></span> Unit</h3>
-      <p>In-memory SQLite, no infra required. Validates handlers, models, and store logic.</p>
-      <p><code>cargo test --features sqlite</code></p>
-    </div>
-    <div class="tier">
-      <h3><span class="dot" style="background:var(--blue)"></span> Local Integration</h3>
-      <p>HTTP against the running endpoint. Requires Docker + Caddy for mTLS.</p>
-      <p><code>docker compose up</code></p>
-    </div>
-    <div class="tier">
-      <h3><span class="dot" style="background:var(--purple)"></span> Remote / mTLS</h3>
-      <p>HTTPS + client certs against the deployed production endpoint.</p>
-      <p><code>./Quickstart ping --certs certs/device/</code></p>
-    </div>
-  </div>
-</section>
-
-<!-- Environments -->
-<section>
-  <h2>Environments</h2>
-  <div class="env-grid">
-    <div class="env-card">
-      <h3>Dev</h3>
-      <p>Local endpoint via <code>docker compose</code> with Caddy mTLS reverse proxy</p>
-    </div>
-    <div class="env-card">
-      <h3>Staging</h3>
-      <p>Deployed dev stack on <code>execute-api</code>, no mTLS enforcement</p>
-    </div>
-    <div class="env-card">
-      <h3>Production</h3>
-      <p>Custom domain <code>supervictor.advin.io</code> with mTLS, Route53, ACM certificate</p>
-    </div>
-  </div>
-</section>
-
-<!-- Certificates -->
-<section>
-  <h2>Certificate Management</h2>
-  <p style="color:var(--muted); margin-bottom:16px; font-size:0.9rem;">
-    The <code>./Quickstart certs</code> subcommand manages the full mTLS certificate lifecycle.
-  </p>
-  <pre>./Quickstart certs ca                          <span style="color:#52525b"># Create root CA</span>
-./Quickstart certs device esp32                <span style="color:#52525b"># Issue device cert</span>
-./Quickstart certs server caddy                <span style="color:#52525b"># Issue server cert</span>
-./Quickstart certs verify                      <span style="color:#52525b"># Verify cert chain</span>
-./Quickstart certs handshake                   <span style="color:#52525b"># Simulate mTLS handshake</span></pre>
-</section>
-
-<!-- Quick Start -->
-<section>
-  <h2>Quick Start</h2>
-  <div class="steps">
-    <div class="step">
-      <div class="step-content">
-        <p>Clone the repository</p>
-        <pre>git clone git@github.com:JimothyJohn/supervictor.git
-cd supervictor</pre>
+      <div class="schematic rv" style="--i:2">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <h3>Signal path — live</h3>
+        <div class="wirepath">
+          <div class="node"><div class="box">&#9632;</div><div class="lbl">Device</div></div>
+          <div class="wire w1"><span class="tag">mTLS 1.3</span><span class="pulse"></span></div>
+          <div class="node"><div class="box">&#9670;</div><div class="lbl">Gateway</div></div>
+          <div class="wire w2"><span class="pulse"></span></div>
+          <div class="node"><div class="box">&#9650;</div><div class="lbl">Cloud</div></div>
+          <div class="wire w3"><span class="pulse"></span></div>
+          <div class="node"><div class="box">&#9679;</div><div class="lbl">You</div></div>
+        </div>
+        <div class="minifleet-wrap">
+        <table class="minifleet" id="minifleet">
+          <thead><tr><th>Device</th><th>FW</th><th>Last uplink</th><th>State</th></tr></thead>
+          <tbody>
+            <tr><td>factory-01</td><td>0.1.0</td><td class="ts">2s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr><td>factory-02</td><td>0.1.0</td><td class="ts">11s ago</td><td><span class="pill fresh">fresh</span></td></tr>
+            <tr><td>warehouse-07</td><td>0.0.9</td><td class="ts">46m ago</td><td><span class="pill stale">stale</span></td></tr>
+            <tr><td>lab-bench-3</td><td>—</td><td class="ts">3h ago</td><td><span class="pill dark">dark</span></td></tr>
+          </tbody>
+        </table>
+        </div>
       </div>
     </div>
-    <div class="step">
-      <div class="step-content">
-        <p>Check the toolchain</p>
-        <pre>./Quickstart install</pre>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-content">
-        <p>Generate certificates and start the local endpoint</p>
-        <pre>./Quickstart certs ca && ./Quickstart certs device esp32 && ./Quickstart certs server caddy
-./Quickstart dev --serve</pre>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-content">
-        <p>Flash the device</p>
-        <pre>./Quickstart edge</pre>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-content">
-        <p>Deploy to production (when ready)</p>
-        <pre>./Quickstart prod</pre>
-      </div>
-    </div>
-  </div>
-</section>
 
-<!-- Infrastructure -->
-<section>
-  <h2>Infrastructure</h2>
-  <p style="color:var(--muted); margin-bottom:16px; font-size:0.9rem;">
-    Defined in <code>endpoint/template.yaml</code> using AWS SAM. Prod-only resources are gated behind a <code>Condition: IsProd</code> flag.
-  </p>
-  <div style="overflow-x:auto">
-    <table class="pipeline">
-      <thead>
-        <tr><th>Resource</th><th>Description</th><th>Scope</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>API Gateway</td><td>Regional REST API with CORS</td><td>All</td></tr>
-        <tr><td>Lambda</td><td>Rust binary via Lambda Web Adapter, arm64</td><td>All</td></tr>
-        <tr><td>ACM Certificate</td><td>DNS-validated TLS for custom domain</td><td>Prod</td></tr>
-        <tr><td>Custom Domain</td><td>mTLS enforcement via S3 truststore</td><td>Prod</td></tr>
-        <tr><td>Route53</td><td>A-record alias to API Gateway</td><td>Prod</td></tr>
-        <tr><td>Application Insights</td><td>CloudWatch monitoring + X-Ray tracing</td><td>All</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+    <!-- SV-01 PROBLEM -->
+    <section id="problem">
+      <div class="sechead rv">
+        <div class="sheetno">SHT SV-01</div>
+        <h2>Fleets don't fail loudly. They go quiet.</h2>
+        <div class="dim"></div>
+      </div>
+      <div class="cards3">
+        <div class="card rv">
+          <div class="idx">FAULT&nbsp;/&nbsp;01</div>
+          <h3>The silent dropout</h3>
+          <p>A sensor stops reporting on a Friday. Nobody notices until the
+          month-end report has a hole in it. Supervictor classifies every
+          device <code>fresh / stale / dark</code> continuously and raises the
+          dark ones before your customer does.</p>
+        </div>
+        <div class="card rv">
+          <div class="idx">FAULT&nbsp;/&nbsp;02</div>
+          <h3>The password spreadsheet</h3>
+          <p>Shared API keys in a wiki, one leak away from a fleet-wide
+          incident. Here every device carries its own X.509 certificate —
+          mutual TLS on every request, revocable per unit, no shared secrets
+          anywhere.</p>
+        </div>
+        <div class="card rv">
+          <div class="idx">FAULT&nbsp;/&nbsp;03</div>
+          <h3>The mystery firmware</h3>
+          <p>Which units still run the version with the bug? Every uplink
+          reports its firmware build, so the dashboard answers in one glance —
+          the question every recall, patch, and audit starts with.</p>
+        </div>
+      </div>
+    </section>
 
-<!-- Tech Stack -->
-<section>
-  <h2>Tech Stack</h2>
-  <div style="overflow-x:auto">
-    <table class="pipeline">
-      <thead>
-        <tr><th>Component</th><th>Crate</th><th>Purpose</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>device</td><td>esp-hal, embassy, esp-mbedtls</td><td>no_std firmware with async WiFi + TLS</td></tr>
-        <tr><td>endpoint</td><td>axum, tokio, rusqlite</td><td>Cloud API with feature-gated store backends</td></tr>
-        <tr><td>cli</td><td>clap, ureq, toml</td><td>Build/test/deploy orchestration</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+    <!-- SV-02 PLATFORM -->
+    <section id="platform">
+      <div class="sechead rv">
+        <div class="sheetno">SHT SV-02</div>
+        <h2>Deploy. Monitor. Sustain.</h2>
+        <div class="dim"></div>
+      </div>
 
-</div>
+      <div class="pillar rv">
+        <div class="k">Deploy <span>PROVISION &amp; IDENTITY</span></div>
+        <ul>
+          <li><strong>One-command onboarding</strong> — issue the certificate, register the device, flash the firmware, verify the first handshake. One step, repeatable per unit.</li>
+          <li><strong>Certificate authority built in</strong> — device, server, and operator credentials from a single managed root; browser bundles for your team included.</li>
+          <li><strong>Runs where you run</strong> — the same service binary deploys serverless on AWS or on a $5/month box on your own network. No lock-in decision on day one.</li>
+        </ul>
+      </div>
+
+      <div class="pillar rv">
+        <div class="k">Monitor <span>SEE EVERY UNIT</span></div>
+        <ul>
+          <li><strong>Live fleet dashboard</strong> — telemetry streams in as it happens; freshness badges triage the fleet at a glance. <a href="demo/" style="color:var(--accent)">Try the demo →</a></li>
+          <li><strong>Machine-readable health</strong> — the same fleet view as JSON, for your alerting, your scripts, your ops tooling.</li>
+          <li><strong>Dark-device watchdog</strong> — a device that goes quiet past its threshold is logged, flagged, and ready to page you.</li>
+        </ul>
+      </div>
+
+      <div class="pillar rv">
+        <div class="k">Sustain <span>KEEP IT RUNNING</span></div>
+        <ul>
+          <li><strong>Firmware accountability</strong> — every unit reports what it runs; version drift is visible the moment it exists.</li>
+          <li><strong>Revoke and reactivate</strong> — device misbehaving or decommissioned? One click flips its status; its certificate stops working with it.</li>
+          <li><strong>Audit trail</strong> — every operator action is logged with the operator's certificate identity. Who did what is never a mystery.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SV-03 SECURITY -->
+    <section id="security">
+      <div class="sechead rv">
+        <div class="sheetno">SHT SV-03</div>
+        <h2>Security spec</h2>
+        <div class="dim"></div>
+      </div>
+      <table class="spec rv">
+        <tr><th>Transport</th><td>Mutual TLS 1.2/1.3 on every connection, device-to-cloud and operator-to-dashboard. There is no unauthenticated surface.</td></tr>
+        <tr><th>Device identity</th><td>Per-device X.509 client certificate signed by your CA. No shared keys, no passwords, revocable per unit.</td></tr>
+        <tr><th>Operator access</th><td>Dashboard and fleet API require operator certificates with an admin role encoded in the certificate itself — spoof-resistant, parsed component-wise.</td></tr>
+        <tr><th>Actions</th><td>All fleet mutations are CSRF-protected and audit-logged with the acting operator's identity; log output is injection-sanitized.</td></tr>
+        <tr><th>Blast-radius controls</th><td>API throttling and compute concurrency caps are set explicitly — a runaway client can't melt the bill or the service.</td></tr>
+        <tr><th>Memory safety</th><td>100% Rust from device firmware to cloud handler — the class of memory-corruption CVEs that dominates embedded security simply isn't in the codebase. Dependencies are audited weekly.</td></tr>
+      </table>
+    </section>
+
+    <!-- SV-04 ARCHITECTURE -->
+    <section id="architecture">
+      <div class="sechead rv">
+        <div class="sheetno">SHT SV-04</div>
+        <h2>One binary, laptop to cloud</h2>
+        <div class="dim"></div>
+      </div>
+      <pre class="arch rv">
+DEVICE (ESP32-C3, no_std Rust)
+   │
+   ├──<b>mTLS</b>──►  AWS API Gateway ──► Lambda ──► DynamoDB      <b>serverless</b>
+   │
+   └──<b>mTLS</b>──►  Caddy ──► service on your hardware ──► SQLite  <b>self-hosted</b>
+                        │
+                        ├── /ui      live dashboard (admin mTLS)
+                        ├── /fleet   health API for your tooling
+                        └── watchdog dark-device alerting</pre>
+      <p class="arch-note rv">
+        The same wire types compile into the firmware and the cloud service —
+        change a field and the compiler finds every affected line on both
+        sides before anything ships. That's the practical meaning of
+        <code>one language, register to database</code>: fleet bugs get caught
+        at build time, not at 2&nbsp;AM.
+      </p>
+    </section>
+
+    <!-- SV-05 NUMBERS -->
+    <section id="numbers">
+      <div class="stats rv">
+        <div class="stat"><div class="n">1</div><div class="d">command to onboard a device</div></div>
+        <div class="stat"><div class="n">0</div><div class="d">passwords or shared keys</div></div>
+        <div class="stat"><div class="n">100%</div><div class="d">Rust, firmware to cloud</div></div>
+        <div class="stat"><div class="n">2</div><div class="d">deploy targets: AWS or yours</div></div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="contact">
+      <div class="ctaband rv">
+        <h2>Put your fleet on the board.</h2>
+        <p>Watch the live dashboard demo, or talk to us about a pilot for your devices.</p>
+        <div class="hero-ctas" style="justify-content:center">
+          <a class="btn primary" href="demo/">&#9654;&nbsp;Open the demo</a>
+          <a class="btn" href="mailto:nick@advin.io?subject=Supervictor%20pilot">Talk to us</a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
 
 <footer>
-  supervictor &middot; Rust
+  <div class="wrap foot">
+    <span>© 2026 ADVIN</span>
+    <a href="developers.html">For engineers</a>
+    <a href="https://github.com/JimothyJohn/supervictor">Source</a>
+    <span class="sp">SHT SV-00 · REV A</span>
+  </div>
 </footer>
+
+<script>
+(function () {
+  document.documentElement.classList.add("js");
+  // scroll reveal
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
+
+  // ticking mini fleet: ages count up; the fresh rows occasionally reset
+  var rows = document.querySelectorAll("#minifleet tbody tr");
+  var ages = [2, 11, 2760, 10800]; // seconds
+  function fmt(s) {
+    if (s < 60) return s + "s ago";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    return Math.floor(s / 3600) + "h ago";
+  }
+  setInterval(function () {
+    ages = ages.map(function (a) { return a + 1; });
+    if (ages[0] > 14) ages[0] = 1;         // factory-01 uplinks every ~14s
+    if (ages[1] > 23) ages[1] = 2;         // factory-02 every ~23s
+    rows.forEach(function (row, i) {
+      row.querySelector(".ts").textContent = fmt(ages[i]);
+    });
+  }, 1000);
+})();
+</script>
 
 </body>
 </html>
