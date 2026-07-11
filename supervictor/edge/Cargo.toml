@@ -52,7 +52,7 @@ name = "tls_dns_dhcp_wifi"
 required-features = ["embedded"]
 
 [dependencies]
-embassy-net = { version = "0.8.0", features = [
+embassy-net = { version = "0.9.1", features = [
   "dhcpv4",
   "medium-ethernet",
   "tcp",
